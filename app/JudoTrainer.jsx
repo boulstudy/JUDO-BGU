@@ -86,7 +86,7 @@ function JudokaManagerModal({ judokas, setJudokas, onClose }) {
   const inp={background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,107,0,0.4)",borderRadius:8,color:"#fff",padding:"8px 12px",fontFamily:"'Heebo',sans-serif",fontSize:15,outline:"none"};
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <div style={{background:"#0d1020",border:"1px solid rgba(255,107,0,0.35)",borderRadius:18,width:"100%",maxWidth:580,maxHeight:"90vh",overflowY:"auto",padding:28,direction:"rtl"}}>
+      <button onClick={()=>setList(list.filter(x=>x.id!==d.id))} style={{background:"rgba(255,60,60,0.12)",border:"none",color:"#ff6060",borderRadius:7,padding:"5px 12px",cursor:"pointer",fontSize:13,fontFamily:"'Heebo',sans-serif"}}>מחק</button>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
           <h2 style={{color:"#FF6B00",fontFamily:"'Heebo',sans-serif",fontSize:22,margin:0}}>👥 ג'ודוקות</h2>
           <button onClick={()=>{setJudokas(list);onClose();}} style={{background:"#FF6B00",border:"none",color:"#fff",borderRadius:10,padding:"10px 22px",cursor:"pointer",fontFamily:"'Heebo',sans-serif",fontWeight:700,fontSize:15}}>שמור וסגור</button>
