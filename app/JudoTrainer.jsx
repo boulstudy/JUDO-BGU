@@ -105,7 +105,7 @@ function useBeeper() {
     if (!ctxRef.current) ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
     return ctxRef.current;
   };
-  const beep = (freq, dur, vol = 0.6) => {
+  const beep = useCallback((freq, dur, vol = 0.6) => {
     try {
       const ctx = getCtx();
       const osc = ctx.createOscillator();
@@ -118,15 +118,16 @@ function useBeeper() {
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + dur);
     } catch(e) {}
-  };
-  // 3 countdown beeps: short at -3, -2, -1 then long at 0
-  const countdown = useCallback(() => {
-    beep(880, 0.12, 0.5); // short high beep
   }, []);
+  // Short beep at t=3 and t=2, long high beep at t=1 (end)
+  const countdownBeep = useCallback((t) => {
+    if (t === 3 || t === 2) beep(880, 0.1, 0.45);
+    else if (t === 1) beep(1046, 0.6, 0.7);
+  }, [beep]);
   const endBeep = useCallback(() => {
-    beep(660, 0.6, 0.7); // longer lower beep for end
-  }, []);
-  return { countdown, endBeep };
+    beep(1046, 0.65, 0.75);
+  }, [beep]);
+  return { countdownBeep, endBeep };
 }
 
 // ── Time Picker (scroll wheel style) ─────────────────────────────────────────
@@ -345,6 +346,7 @@ function EditorModal({ drills, setDrills, currentIndex, judokas, setJudokas, pai
                       <button onClick={() => { const a=[...list]; const t=i-1; if(t>=0){[a[i],a[t]]=[a[t],a[i]]; setList(a);}}} style={{background:"none",border:"1px solid rgba(255,255,255,0.08)",color:"#fff",borderRadius:5,width:24,height:24,cursor:"pointer",fontSize:11}}>↑</button>
                       <button onClick={() => { const a=[...list]; const t=i+1; if(t<a.length){[a[i],a[t]]=[a[t],a[i]]; setList(a);}}} style={{background:"none",border:"1px solid rgba(255,255,255,0.08)",color:"#fff",borderRadius:5,width:24,height:24,cursor:"pointer",fontSize:11}}>↓</button>
                       <button onClick={() => { setEditId(d.id); setEditData({...d}); }} style={{background:"rgba(255,107,0,0.14)",border:"none",color:"#FF6B00",borderRadius:6,padding:"4px 9px",cursor:"pointer",fontSize:12,fontFamily:"Heebo,sans-serif"}}>ערוך</button>
+                      <button onClick={() => { const copy={...d,id:Date.now(),name:d.name+" (עותק)"}; setList([...list.slice(0,i+1),copy,...list.slice(i+1)]); }} style={{background:"rgba(255,255,255,0.06)",border:"none",color:"rgba(255,255,255,0.45)",borderRadius:6,padding:"4px 9px",cursor:"pointer",fontSize:12,fontFamily:"Heebo,sans-serif"}}>שכפל</button>
                       <button onClick={() => setList(list.filter(x=>x.id!==d.id))} style={{background:"rgba(255,60,60,0.1)",border:"none",color:"#ff6060",borderRadius:6,padding:"4px 9px",cursor:"pointer",fontSize:12,fontFamily:"Heebo,sans-serif"}}>מחק</button>
                     </div>
                   </div>
@@ -520,7 +522,7 @@ export default function JudoTV() {
 
   const intervalRef = useRef(null);
   const alertRef    = useRef(null);
-  const { countdown, endBeep } = useBeeper();
+  const { countdownBeep, endBeep } = useBeeper();
 
   const current  = drills[drillIdx] || drills[0];
   const phases   = current ? getDrillPhases(current) : [];
@@ -584,7 +586,7 @@ export default function JudoTV() {
     if (running) {
       intervalRef.current = setInterval(() => {
         setTimeLeft(t => {
-          if (t <= 3 && t > 0) countdown();
+          if (t <= 3 && t > 0) countdownBeep(t);
           if (t <= 1) { advancePhase(); return 0; }
           return t - 1;
         });
@@ -655,7 +657,7 @@ export default function JudoTV() {
         <div style={{display:"flex",alignItems:"center",gap:13}}>
           <div style={{width:44,height:44,borderRadius:11,background:"linear-gradient(135deg,#FF6B00,#cc4400)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,boxShadow:"0 4px 16px rgba(255,107,0,0.38)"}}>🥋</div>
           <div>
-            <div style={{color:"#fff",fontSize:21,fontWeight:900,letterSpacing:-0.5}}>נבחרת יודו BGU</div>
+            <div style={{color:"#fff",fontSize:21,fontWeight:900,letterSpacing:-0.5}}>נבחרת ג׳ודו BGU</div>
             <div style={{color:"rgba(255,107,0,0.58)",fontSize:10,letterSpacing:4,textTransform:"uppercase"}}>Ben-Gurion University</div>
           </div>
         </div>
