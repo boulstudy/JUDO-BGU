@@ -731,7 +731,7 @@ export default function JudoTV() {
 
           {/* Phase progress dots */}
           {phases.length > 1 && (
-            <div style={{display:"flex",gap:4"}}>
+            <div style={{display:"flex",gap:4}}>
               {phases.map((p,i) => (
                 <div key={i} onClick={() => { setPhaseIdx(i); setTimeLeft(p.duration); }} style={{flex:1,height:4,borderRadius:2,cursor:"pointer",background:i<phaseIdx?"rgba(255,107,0,0.45)":i===phaseIdx?"#FF6B00":p.phase==="rest"?"rgba(168,255,120,0.18)":"rgba(255,255,255,0.09)",transition:"background 0.28s"}}/>
               ))}
