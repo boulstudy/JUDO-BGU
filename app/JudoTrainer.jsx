@@ -152,15 +152,12 @@ function TimeWheel({ value, onChange, max, label }) {
         <div style={{position:"absolute",top:0,left:0,right:0,height:44,background:"linear-gradient(to bottom,rgba(13,16,32,0.95),transparent)",pointerEvents:"none",zIndex:2}}/>
         <div style={{position:"absolute",bottom:0,left:0,right:0,height:44,background:"linear-gradient(to top,rgba(13,16,32,0.95),transparent)",pointerEvents:"none",zIndex:2}}/>
         <div style={{position:"absolute",top:"50%",left:0,right:0,height:44,transform:"translateY(-50%)",background:"rgba(255,107,0,0.12)",borderTop:"1px solid rgba(255,107,0,0.4)",borderBottom:"1px solid rgba(255,107,0,0.4)",pointerEvents:"none",zIndex:1}}/>
-        <div ref={ref} onScroll={handleScroll} style={{height:"100%",overflowY:"scroll",scrollSnapType:"y mandatory",scrollbarWidth:"none",msOverflowStyle:"none",paddingTop:44,paddingBottom:44}}>
-          <style>{".tw-hide::-webkit-scrollbar{display:none}"}</style>
-          <div className="tw-hide" style={{display:"contents"}}>
+        <div ref={ref} onScroll={handleScroll} style={{height:"100%",overflowY:"scroll",scrollSnapType:"y mandatory",scrollbarWidth:"none",msOverflowStyle:"none",paddingTop:44,paddingBottom:44,WebkitOverflowScrolling:"touch"}}>
             {items.map(i => (
               <div key={i} style={{height:44,display:"flex",alignItems:"center",justifyContent:"center",scrollSnapAlign:"center",color:i===value?"#fff":"rgba(255,255,255,0.3)",fontSize:i===value?22:17,fontFamily:"Oswald,sans-serif",fontWeight:700,transition:"all 0.15s",cursor:"pointer"}} onClick={() => onChange(i)}>
                 {String(i).padStart(2,"0")}
               </div>
             ))}
-          </div>
         </div>
       </div>
     </div>
@@ -641,7 +638,6 @@ export default function JudoTV() {
         @keyframes alertBorder{0%,100%{opacity:0}50%{opacity:1}}
         @keyframes restGlow{0%,100%{box-shadow:0 0 20px rgba(168,255,120,0.1)}50%{box-shadow:0 0 40px rgba(168,255,120,0.28)}}
         *{box-sizing:border-box;margin:0;padding:0}
-        .tw-hide::-webkit-scrollbar{display:none}
       `}</style>
 
       <div style={{position:"absolute",inset:0,pointerEvents:"none",overflow:"hidden"}}>
