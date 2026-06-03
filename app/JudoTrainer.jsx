@@ -102,12 +102,14 @@ function totalDrillTime(drill) {
 function useBeeper() {
   const ctxRef = useRef(null);
   const getCtx = () => {
+    if (typeof window === "undefined") return null;
     if (!ctxRef.current) ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
     return ctxRef.current;
   };
   const beep = useCallback((freq, dur, vol = 0.6) => {
     try {
       const ctx = getCtx();
+      if (!ctx) return;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain); gain.connect(ctx.destination);
