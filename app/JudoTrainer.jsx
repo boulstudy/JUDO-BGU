@@ -95,7 +95,7 @@ function totalDrillTime(drill) {
 }
 
 
-// ── Sound (client-only) ───────────────────────────────────────────────────────
+// ── Sound — Seconds-style interval timer beeps (client-only) ─────────────────
 function useSound() {
   const ctxRef = useRef(null);
 
@@ -105,37 +105,47 @@ function useSound() {
       if (!ctxRef.current) {
         ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
       }
+      // Resume if suspended (iOS requires user gesture first)
+      if (ctxRef.current.state === "suspended") ctxRef.current.resume();
       return ctxRef.current;
     } catch(e) { return null; }
   }, []);
 
-  const beep = useCallback((freq, duration, vol) => {
+  const beep = useCallback((freq, dur, vol, startOffset) => {
     try {
       const ctx = getCtx();
       if (!ctx) return;
+      const t = ctx.currentTime + (startOffset || 0);
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.type = "sine";
+      osc.type = "square";
       osc.frequency.value = freq;
-      gain.gain.setValueAtTime(vol || 0.5, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-      osc.start(ctx.currentTime);
-      osc.stop(ctx.currentTime + duration);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(vol || 0.4, t + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      osc.start(t);
+      osc.stop(t + dur + 0.01);
     } catch(e) {}
   }, [getCtx]);
 
-  // 3 short beeps at t=3,2,1 like interval timer apps
+  // Seconds-style: 3 short warning beeps at t=3,2,1
+  // t=3,2 → short high beep (440Hz, like a soft warning tick)
+  // t=1   → slightly longer higher beep (880Hz, louder warning)
   const tickBeep = useCallback((t) => {
-    if (t === 3 || t === 2) beep(880, 0.08, 0.4);
-    else if (t === 1) beep(1100, 0.5, 0.6);
+    if (t === 3 || t === 2) {
+      beep(660, 0.09, 0.35, 0);
+    } else if (t === 1) {
+      beep(880, 0.14, 0.5, 0);
+    }
   }, [beep]);
 
-  // Long double-beep at phase end
+  // Seconds-style end: 3 rapid beeps — classic interval timer end signal
   const endBeep = useCallback(() => {
-    beep(880, 0.15, 0.6);
-    setTimeout(() => beep(880, 0.4, 0.7), 180);
+    beep(880, 0.1, 0.55, 0);
+    beep(880, 0.1, 0.55, 0.15);
+    beep(1100, 0.35, 0.65, 0.30);
   }, [beep]);
 
   return { tickBeep, endBeep };
