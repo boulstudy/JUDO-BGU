@@ -94,6 +94,53 @@ function totalDrillTime(drill) {
   return getDrillPhases(drill).reduce((a,p) => a+p.duration, 0);
 }
 
+
+// ── Sound (client-only) ───────────────────────────────────────────────────────
+function useSound() {
+  const ctxRef = useRef(null);
+
+  const getCtx = useCallback(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      if (!ctxRef.current) {
+        ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      return ctxRef.current;
+    } catch(e) { return null; }
+  }, []);
+
+  const beep = useCallback((freq, duration, vol) => {
+    try {
+      const ctx = getCtx();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(vol || 0.5, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + duration);
+    } catch(e) {}
+  }, [getCtx]);
+
+  // 3 short beeps at t=3,2,1 like interval timer apps
+  const tickBeep = useCallback((t) => {
+    if (t === 3 || t === 2) beep(880, 0.08, 0.4);
+    else if (t === 1) beep(1100, 0.5, 0.6);
+  }, [beep]);
+
+  // Long double-beep at phase end
+  const endBeep = useCallback(() => {
+    beep(880, 0.15, 0.6);
+    setTimeout(() => beep(880, 0.4, 0.7), 180);
+  }, [beep]);
+
+  return { tickBeep, endBeep };
+}
+
 // ── Time Picker ───────────────────────────────────────────────────────────────
 function TimeWheel({ value, onChange, max, label }) {
   const items = Array.from({length: max+1}, (_,i) => i);
@@ -503,6 +550,7 @@ export default function JudoTV() {
 
   const intervalRef = useRef(null);
   const alertRef    = useRef(null);
+  const { tickBeep, endBeep } = useSound();
 
   const current    = drills[drillIdx] || drills[0];
   const phases     = getDrillPhases(current);
@@ -532,9 +580,10 @@ export default function JudoTV() {
 
   const triggerAlert = useCallback(() => {
     setAlertActive(true);
+    endBeep();
     clearTimeout(alertRef.current);
     alertRef.current = setTimeout(() => setAlertActive(false), 2500);
-  }, []);
+  }, [endBeep]);
 
   const advancePhase = useCallback(() => {
     setPhaseIdx(pi => {
@@ -565,6 +614,7 @@ export default function JudoTV() {
     if (running) {
       intervalRef.current = setInterval(() => {
         setTimeLeft(t => {
+          if (t <= 3 && t > 0) tickBeep(t);
           if (t <= 1) { advancePhase(); return 0; }
           return t - 1;
         });
@@ -590,7 +640,7 @@ export default function JudoTV() {
       clearInterval(intervalRef.current);
     }
     return () => clearInterval(intervalRef.current);
-  }, [running, isPersonal, judokas, advancePhase]);
+  }, [running, isPersonal, judokas, advancePhase, tickBeep]);
 
   const goToDrill = useCallback(i => {
     if (i >= 0 && i < drills.length) { setDrillIdx(i); setRunning(false); }
