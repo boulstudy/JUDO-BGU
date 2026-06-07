@@ -100,15 +100,26 @@ function totalDrillTime(drill) {
 function useSound(soundType) {
   const ctxRef = useRef(null);
 
-  const getCtx = useCallback(() => {
+  // Must be called directly inside a user gesture (tap/click) to work on iOS
+  const initCtx = useCallback(() => {
     if (typeof window === "undefined") return null;
     try {
       if (!ctxRef.current) {
-        ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ctxRef.current = new AC();
       }
-      if (ctxRef.current.state === "suspended") ctxRef.current.resume();
+      if (ctxRef.current.state === "suspended") {
+        ctxRef.current.resume();
+      }
       return ctxRef.current;
     } catch(e) { return null; }
+  }, []);
+
+  const getCtx = useCallback(() => {
+    if (!ctxRef.current) return null;
+    if (ctxRef.current.state === "suspended") ctxRef.current.resume();
+    return ctxRef.current;
   }, []);
 
   // Sharp electronic beep — Flex Timer style
@@ -188,7 +199,7 @@ function useSound(soundType) {
     }
   }, [soundType, playBeep, playBuzz]);
 
-  return { tickBeep, endBeep };
+  return { tickBeep, endBeep, initCtx };
 }
 
 // ── Time Picker ───────────────────────────────────────────────────────────────
@@ -637,7 +648,7 @@ export default function JudoTV() {
 
   const intervalRef = useRef(null);
   const alertRef    = useRef(null);
-  const { tickBeep, endBeep } = useSound(soundType);
+  const { tickBeep, endBeep, initCtx } = useSound(soundType);
 
   const current    = drills[drillIdx] || drills[0];
   const phases     = getDrillPhases(current);
@@ -897,7 +908,7 @@ export default function JudoTV() {
           <div style={{display:"flex",gap:9,justifyContent:"center",flexWrap:"wrap"}}>
             <button onClick={() => goToDrill(drillIdx-1)} disabled={drillIdx===0} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:drillIdx===0?"rgba(255,255,255,0.1)":"#fff",borderRadius:11,padding:"13px 20px",cursor:drillIdx===0?"not-allowed":"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:17}}>קודם</button>
             <button onClick={resetPhase} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:"#fff",borderRadius:11,padding:"13px 20px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:17}}>אפס</button>
-            <button onClick={() => setRunning(r=>!r)} style={{background:running?"rgba(255,60,60,0.17)":"linear-gradient(135deg,#FF6B00,#cc4400)",border:running?"2px solid rgba(255,60,60,0.38)":"none",color:"#fff",borderRadius:13,padding:"13px 48px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:900,fontSize:21,boxShadow:running?"none":"0 5px 22px rgba(255,107,0,0.38)",minWidth:150}}>{running?"עצור":"הפעל"}</button>
+            <button onClick={() => { initCtx(); setRunning(r=>!r); }} style={{background:running?"rgba(255,60,60,0.17)":"linear-gradient(135deg,#FF6B00,#cc4400)",border:running?"2px solid rgba(255,60,60,0.38)":"none",color:"#fff",borderRadius:13,padding:"13px 48px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:900,fontSize:21,boxShadow:running?"none":"0 5px 22px rgba(255,107,0,0.38)",minWidth:150}}>{running?"עצור":"הפעל"}</button>
             <button onClick={nextPhaseManual} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:"#fff",borderRadius:11,padding:"13px 20px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:17}}>הבא</button>
           </div>
 
