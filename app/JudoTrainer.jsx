@@ -169,7 +169,7 @@ function TimeWheel({ value, onChange, max, label }) {
         <div style={{position:"absolute",top:0,left:0,right:0,height:44,background:"linear-gradient(to bottom,rgba(13,16,32,0.95),transparent)",pointerEvents:"none",zIndex:2}}/>
         <div style={{position:"absolute",bottom:0,left:0,right:0,height:44,background:"linear-gradient(to top,rgba(13,16,32,0.95),transparent)",pointerEvents:"none",zIndex:2}}/>
         <div style={{position:"absolute",top:"50%",left:0,right:0,height:44,transform:"translateY(-50%)",background:"rgba(255,107,0,0.12)",borderTop:"1px solid rgba(255,107,0,0.4)",borderBottom:"1px solid rgba(255,107,0,0.4)",pointerEvents:"none",zIndex:1}}/>
-        <div ref={ref} onScroll={handleScroll} style={{height:"100%",overflowY:"scroll",scrollSnapType:"y mandatory",scrollbarWidth:"none",msOverflowStyle:"none",paddingTop:44,paddingBottom:44,WebkitOverflowScrolling:"touch"}}>
+        <div ref={ref} onScroll={handleScroll} style={{height:"100%",overflowY:"scroll",scrollSnapType:"y mandatory",scrollbarWidth:"none",msOverflowStyle:"none",paddingTop:44,paddingBottom:44,WebkitOverflowScrolling:"touch",touchAction:"pan-y"}}>
           {items.map(i => (
             <div key={i} onClick={() => onChange(i)} style={{height:44,display:"flex",alignItems:"center",justifyContent:"center",scrollSnapAlign:"center",color:i===value?"#fff":"rgba(255,255,255,0.3)",fontSize:i===value?22:17,fontFamily:"Oswald,sans-serif",fontWeight:700,transition:"all 0.15s",cursor:"pointer"}}>
               {String(i).padStart(2,"0")}
@@ -374,7 +374,7 @@ function EditorModal({ drills, setDrills, currentIndex, judokas, setJudokas, pai
                       a.splice(i, 0, item);
                       setList(a);
                     }}
-                    style={{background:i===currentIndex?"rgba(255,107,0,0.09)":"rgba(255,255,255,0.025)",border:i===currentIndex?"1px solid rgba(255,107,0,0.4)":"1px solid rgba(255,255,255,0.05)",borderRadius:10,padding:"9px 13px",marginBottom:5,display:"flex",alignItems:"center",gap:9,cursor:"grab"}}>
+                    style={{background:i===currentIndex?"rgba(255,107,0,0.09)":"rgba(255,255,255,0.025)",border:i===currentIndex?"1px solid rgba(255,107,0,0.4)":"1px solid rgba(255,255,255,0.05)",borderRadius:10,padding:"9px 13px",marginBottom:5,display:"flex",alignItems:"center",gap:9,cursor:"grab",touchAction:"manipulation"}}>
                     <div style={{color:"rgba(255,255,255,0.2)",fontSize:14,cursor:"grab",flexShrink:0,userSelect:"none"}}>⠿</div>
                     <div style={{width:4,height:32,borderRadius:2,background:SEC_COLOR[d.section||"warmup"],flexShrink:0}}/>
                     <span style={{color:"rgba(255,107,0,0.5)",fontFamily:"monospace",fontSize:12,minWidth:18}}>{i+1}</span>
@@ -385,8 +385,8 @@ function EditorModal({ drills, setDrills, currentIndex, judokas, setJudokas, pai
                     </div>
                     <div style={{display:"flex",gap:4,alignItems:"center"}}>
                       <div title="מעבר אוטומטי" style={{width:6,height:6,borderRadius:"50%",background:d.autoNext?"#a8ff78":"rgba(255,255,255,0.15)"}}/>
-                      <button onClick={() => { const a=[...list]; const t=i-1; if(t>=0){[a[i],a[t]]=[a[t],a[i]]; setList(a);}}} style={{background:"none",border:"1px solid rgba(255,255,255,0.08)",color:"#fff",borderRadius:5,width:24,height:24,cursor:"pointer",fontSize:11}}>↑</button>
-                      <button onClick={() => { const a=[...list]; const t=i+1; if(t<a.length){[a[i],a[t]]=[a[t],a[i]]; setList(a);}}} style={{background:"none",border:"1px solid rgba(255,255,255,0.08)",color:"#fff",borderRadius:5,width:24,height:24,cursor:"pointer",fontSize:11}}>↓</button>
+                      <button onClick={() => { const a=[...list]; const t=i-1; if(t>=0){[a[i],a[t]]=[a[t],a[i]]; setList(a);}}} style={{background:"none",border:"1px solid rgba(255,255,255,0.08)",color:"#fff",borderRadius:5,width:32,height:32,cursor:"pointer",fontSize:13}}>↑</button>
+                      <button onClick={() => { const a=[...list]; const t=i+1; if(t<a.length){[a[i],a[t]]=[a[t],a[i]]; setList(a);}}} style={{background:"none",border:"1px solid rgba(255,255,255,0.08)",color:"#fff",borderRadius:5,width:32,height:32,cursor:"pointer",fontSize:13}}>↓</button>
                       <button onClick={() => { setEditId(d.id); setEditData({...d}); }} style={{background:"rgba(255,107,0,0.14)",border:"none",color:"#FF6B00",borderRadius:6,padding:"4px 9px",cursor:"pointer",fontSize:12,fontFamily:"Heebo,sans-serif"}}>ערוך</button>
                       <button onClick={() => { const copy={...d,id:Date.now(),name:d.name+" (עותק)"}; setList([...list.slice(0,i+1),copy,...list.slice(i+1)]); }} style={{background:"rgba(255,255,255,0.06)",border:"none",color:"rgba(255,255,255,0.45)",borderRadius:6,padding:"4px 9px",cursor:"pointer",fontSize:12,fontFamily:"Heebo,sans-serif"}}>שכפל</button>
                       <button onClick={() => setList(list.filter(x=>x.id!==d.id))} style={{background:"rgba(255,60,60,0.1)",border:"none",color:"#ff6060",borderRadius:6,padding:"4px 9px",cursor:"pointer",fontSize:12,fontFamily:"Heebo,sans-serif"}}>מחק</button>
@@ -756,13 +756,21 @@ export default function JudoTV() {
 
         {/* LEFT: drill list */}
         <div style={{width:leftW,display:"flex",flexDirection:"column",flexShrink:0,position:"relative",minWidth:140,maxWidth:360}}>
-          <div onMouseDown={e => {
-            const startX = e.clientX, startW = leftW;
-            const move = ev => setLeftW(Math.min(360, Math.max(140, startW + (ev.clientX - startX))));
-            const up = () => { window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up); };
-            window.addEventListener("mousemove",move); window.addEventListener("mouseup",up);
-          }} style={{position:"absolute",left:-4,top:0,bottom:0,width:8,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <div style={{width:2,height:40,borderRadius:1,background:"rgba(255,107,0,0.3)"}}/>
+          <div
+            onMouseDown={e => {
+              const startX = e.clientX, startW = leftW;
+              const move = ev => setLeftW(Math.min(360, Math.max(140, startW + (ev.clientX - startX))));
+              const up = () => { window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up); };
+              window.addEventListener("mousemove",move); window.addEventListener("mouseup",up);
+            }}
+            onTouchStart={e => {
+              const startX = e.touches[0].clientX, startW = leftW;
+              const move = ev => setLeftW(Math.min(360, Math.max(140, startW + (ev.touches[0].clientX - startX))));
+              const up = () => { window.removeEventListener("touchmove",move); window.removeEventListener("touchend",up); };
+              window.addEventListener("touchmove",move,{passive:false}); window.addEventListener("touchend",up);
+            }}
+            style={{position:"absolute",left:-4,top:0,bottom:0,width:16,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none"}}>
+            <div style={{width:3,height:40,borderRadius:2,background:"rgba(255,107,0,0.4)"}}/>
           </div>
           <div style={{color:"rgba(255,255,255,0.18)",fontSize:10,letterSpacing:4,textTransform:"uppercase",marginBottom:9}}>מערך האימון</div>
           <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:3}}>
@@ -837,13 +845,21 @@ export default function JudoTV() {
 
         {/* RIGHT */}
         <div style={{width:rightW,flexShrink:0,display:"flex",flexDirection:"column",gap:10,position:"relative",minWidth:180,maxWidth:500}}>
-          <div onMouseDown={e => {
-            const startX = e.clientX, startW = rightW;
-            const move = ev => setRightW(Math.min(500, Math.max(180, startW - (ev.clientX - startX))));
-            const up = () => { window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up); };
-            window.addEventListener("mousemove",move); window.addEventListener("mouseup",up);
-          }} style={{position:"absolute",right:-4,top:0,bottom:0,width:8,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <div style={{width:2,height:40,borderRadius:1,background:"rgba(255,107,0,0.3)"}}/>
+          <div
+            onMouseDown={e => {
+              const startX = e.clientX, startW = rightW;
+              const move = ev => setRightW(Math.min(500, Math.max(180, startW - (ev.clientX - startX))));
+              const up = () => { window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up); };
+              window.addEventListener("mousemove",move); window.addEventListener("mouseup",up);
+            }}
+            onTouchStart={e => {
+              const startX = e.touches[0].clientX, startW = rightW;
+              const move = ev => setRightW(Math.min(500, Math.max(180, startW - (ev.touches[0].clientX - startX))));
+              const up = () => { window.removeEventListener("touchmove",move); window.removeEventListener("touchend",up); };
+              window.addEventListener("touchmove",move,{passive:false}); window.addEventListener("touchend",up);
+            }}
+            style={{position:"absolute",right:-4,top:0,bottom:0,width:16,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none"}}>
+            <div style={{width:3,height:40,borderRadius:2,background:"rgba(255,107,0,0.4)"}}/>
           </div>
           {!isPersonal ? (
             <div style={{background:"rgba(255,255,255,0.018)",border:(isRestPhase||isRest)?"1px solid rgba(168,255,120,0.14)":"1px solid rgba(255,255,255,0.055)",borderRadius:14,padding:"15px 16px",flex:1,display:"flex",flexDirection:"column",animation:(isRestPhase||isRest)?"restGlow 2s infinite":"none",transition:"border 0.5s"}}>
