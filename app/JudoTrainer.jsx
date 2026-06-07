@@ -217,7 +217,17 @@ function DrillForm({ drill, onChange, onCancel, onSave, onSaveToLibrary }) {
         </div>
         <div style={{flex:1,minWidth:90}}>
           <span style={lbl}>סוג</span>
-          <select value={d.type} onChange={e => onChange({...d,type:e.target.value})} style={inp}>
+          <select value={d.type} onChange={e => {
+            const t = e.target.value;
+            const defaults = t==="rest"
+              ? {type:t,section:"rest",pattern:"together",restTiming:"none",activeColor:"both",rounds:1}
+              : t==="personal"
+              ? {type:t,section:"mixed",pattern:"together",restTiming:"none",activeColor:"both"}
+              : t==="group"
+              ? {type:t,section:"warmup",pattern:"together",restTiming:"none",activeColor:"both"}
+              : {type:t,section:"technique",pattern:"alternate",restTiming:"after_each",activeColor:"white"};
+            onChange({...d,...defaults});
+          }} style={inp}>
             <option value="group">קבוצה</option>
             <option value="partner">זוגות</option>
             <option value="personal">אישי</option>
@@ -351,7 +361,21 @@ function EditorModal({ drills, setDrills, currentIndex, judokas, setJudokas, pai
                     onSave={() => { setList(list.map(x => x.id===d.id?editData:x)); setEditId(null); }}
                     onSaveToLibrary={() => saveToLib(editData)}/>
                 ) : (
-                  <div style={{background:i===currentIndex?"rgba(255,107,0,0.09)":"rgba(255,255,255,0.025)",border:i===currentIndex?"1px solid rgba(255,107,0,0.4)":"1px solid rgba(255,255,255,0.05)",borderRadius:10,padding:"9px 13px",marginBottom:5,display:"flex",alignItems:"center",gap:9}}>
+                  <div
+                    draggable
+                    onDragStart={e => { e.dataTransfer.setData("text/plain", String(i)); }}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={e => {
+                      e.preventDefault();
+                      const from = parseInt(e.dataTransfer.getData("text/plain"));
+                      if (from === i) return;
+                      const a = [...list];
+                      const item = a.splice(from, 1)[0];
+                      a.splice(i, 0, item);
+                      setList(a);
+                    }}
+                    style={{background:i===currentIndex?"rgba(255,107,0,0.09)":"rgba(255,255,255,0.025)",border:i===currentIndex?"1px solid rgba(255,107,0,0.4)":"1px solid rgba(255,255,255,0.05)",borderRadius:10,padding:"9px 13px",marginBottom:5,display:"flex",alignItems:"center",gap:9,cursor:"grab"}}>
+                    <div style={{color:"rgba(255,255,255,0.2)",fontSize:14,cursor:"grab",flexShrink:0,userSelect:"none"}}>⠿</div>
                     <div style={{width:4,height:32,borderRadius:2,background:SEC_COLOR[d.section||"warmup"],flexShrink:0}}/>
                     <span style={{color:"rgba(255,107,0,0.5)",fontFamily:"monospace",fontSize:12,minWidth:18}}>{i+1}</span>
                     <div style={{flex:1,minWidth:0}}>
@@ -445,6 +469,7 @@ function WorkoutModal({ drills, judokas, pairs, onLoad, onClose }) {
   const [newName, setNewName] = useState("");
   const [newDate, setNewDate] = useState("");
   const [saving, setSaving] = useState(false);
+  const [updatingId, setUpdatingId] = useState(null);
 
   useEffect(() => {
     const today = new Date().toISOString().slice(0,10);
@@ -461,6 +486,13 @@ function WorkoutModal({ drills, judokas, pairs, onLoad, onClose }) {
     if(r && r[0]) setWorkouts(prev=>[r[0],...prev]);
     setSaving(false);
     setNewName("");
+  };
+
+  const update = async (id) => {
+    setUpdatingId(id);
+    await supa("workouts?id=eq."+id, { method:"PATCH", body:JSON.stringify({drills,judokas,pairs}) });
+    setWorkouts(prev => prev.map(w => w.id===id ? {...w,drills,judokas,pairs} : w));
+    setUpdatingId(null);
   };
 
   return (
@@ -486,6 +518,7 @@ function WorkoutModal({ drills, judokas, pairs, onLoad, onClose }) {
               <div style={{color:"rgba(255,255,255,0.28)",fontSize:12}}>{w.date} · {w.drills?w.drills.length:0} תרגילים</div>
             </div>
             <button onClick={() => { onLoad(w); onClose(); }} style={{background:"rgba(255,107,0,0.18)",border:"none",color:"#FF6B00",borderRadius:7,padding:"6px 13px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13,fontWeight:700}}>טען</button>
+            <button onClick={() => update(w.id)} style={{background:"rgba(0,229,255,0.12)",border:"1px solid rgba(0,229,255,0.25)",color:"#00e5ff",borderRadius:7,padding:"6px 13px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13,fontWeight:700}}>{updatingId===w.id?"...":"עדכן"}</button>
             <button onClick={async () => { await supa("workouts?id=eq."+w.id,{method:"DELETE",prefer:""}); setWorkouts(workouts.filter(x=>x.id!==w.id)); }} style={{background:"none",border:"none",color:"rgba(255,60,60,0.45)",cursor:"pointer",fontSize:17}}>x</button>
           </div>
         ))}
@@ -547,6 +580,8 @@ export default function JudoTV() {
   const [personalTimers, setPersonalTimers] = useState({});
   const [modal,  setModal]  = useState(null);
   const [globalAutoNext, setGlobalAutoNext] = useState(true);
+  const [leftW,  setLeftW]  = useState(230);
+  const [rightW, setRightW] = useState(300);
 
   const intervalRef = useRef(null);
   const alertRef    = useRef(null);
@@ -720,7 +755,15 @@ export default function JudoTV() {
       <div style={{flex:1,display:"flex",overflow:"hidden",padding:"14px 22px",gap:16,position:"relative",zIndex:1}}>
 
         {/* LEFT: drill list */}
-        <div style={{width:230,display:"flex",flexDirection:"column",flexShrink:0}}>
+        <div style={{width:leftW,display:"flex",flexDirection:"column",flexShrink:0,position:"relative",minWidth:140,maxWidth:360}}>
+          <div onMouseDown={e => {
+            const startX = e.clientX, startW = leftW;
+            const move = ev => setLeftW(Math.min(360, Math.max(140, startW + (ev.clientX - startX))));
+            const up = () => { window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up); };
+            window.addEventListener("mousemove",move); window.addEventListener("mouseup",up);
+          }} style={{position:"absolute",left:-4,top:0,bottom:0,width:8,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <div style={{width:2,height:40,borderRadius:1,background:"rgba(255,107,0,0.3)"}}/>
+          </div>
           <div style={{color:"rgba(255,255,255,0.18)",fontSize:10,letterSpacing:4,textTransform:"uppercase",marginBottom:9}}>מערך האימון</div>
           <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:3}}>
             {drills.map((d,i) => {
@@ -793,7 +836,15 @@ export default function JudoTV() {
         </div>
 
         {/* RIGHT */}
-        <div style={{width:isPersonal?370:300,flexShrink:0,display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{width:rightW,flexShrink:0,display:"flex",flexDirection:"column",gap:10,position:"relative",minWidth:180,maxWidth:500}}>
+          <div onMouseDown={e => {
+            const startX = e.clientX, startW = rightW;
+            const move = ev => setRightW(Math.min(500, Math.max(180, startW - (ev.clientX - startX))));
+            const up = () => { window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up); };
+            window.addEventListener("mousemove",move); window.addEventListener("mouseup",up);
+          }} style={{position:"absolute",right:-4,top:0,bottom:0,width:8,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <div style={{width:2,height:40,borderRadius:1,background:"rgba(255,107,0,0.3)"}}/>
+          </div>
           {!isPersonal ? (
             <div style={{background:"rgba(255,255,255,0.018)",border:(isRestPhase||isRest)?"1px solid rgba(168,255,120,0.14)":"1px solid rgba(255,255,255,0.055)",borderRadius:14,padding:"15px 16px",flex:1,display:"flex",flexDirection:"column",animation:(isRestPhase||isRest)?"restGlow 2s infinite":"none",transition:"border 0.5s"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
