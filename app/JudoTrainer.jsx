@@ -604,12 +604,12 @@ function SplitPanel({ pairs, judokas, who, showNames }) {
             border:active?(color==="white"?"2px solid #fff":"2px solid #1a5fd6"):"2px solid rgba(255,255,255,0.04)",
             display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,
             transition:"all 0.5s",
-            opacity: active ? 1 : 0.35,
-            filter: active ? "none" : "brightness(0.4)",
+            opacity: active ? 1 : 0.3,
+            filter: active ? "none" : "brightness(0.35)",
             boxShadow:active?(color==="white"?"0 0 28px rgba(255,255,255,0.18)":"0 0 28px rgba(26,95,214,0.32)"):"none"
           }}>
-            <span style={{fontSize:active?32:22,transition:"font-size 0.4s"}}>🥋</span>
-            <span style={{color:active?(color==="white"?"#111":"#fff"):"rgba(255,255,255,0.3)",fontWeight:800,fontSize:active?19:14,transition:"all 0.5s"}}>{label}</span>
+            <span style={{fontSize:active?32:20,transition:"font-size 0.4s"}}>🥋</span>
+            <span style={{color:active?(color==="white"?"#111":"#fff"):"rgba(255,255,255,0.25)",fontWeight:800,fontSize:active?19:13,transition:"all 0.5s"}}>{label}</span>
             {active && <span style={{fontSize:10,color:color==="white"?"rgba(0,0,0,0.4)":"rgba(255,255,255,0.5)",letterSpacing:2}}>עובד</span>}
           </div>
         ))}
@@ -636,7 +636,7 @@ function SplitPanel({ pairs, judokas, who, showNames }) {
                 boxShadow:active?(color==="white"?"0 0 18px rgba(255,255,255,0.15)":"0 0 18px rgba(26,95,214,0.28)"):"none"
               }}>
                 <span style={{fontSize:active?19:14,transition:"font-size 0.4s"}}>🥋</span>
-                <span style={{color:active?(color==="white"?"#111":"#fff"):"rgba(255,255,255,0.2)",fontWeight:800,fontSize:active?15:12,transition:"all 0.5s"}}>{person?person.name:"?"}</span>
+                <span style={{color:active?(color==="white"?"#111":"#fff"):"rgba(255,255,255,0.2)",fontWeight:800,fontSize:active?15:12,transition:"all 0.5s"}}>{person?person.name:""}</span>
                 {active && <span style={{fontSize:9,color:color==="white"?"rgba(0,0,0,0.38)":"rgba(255,255,255,0.48)",letterSpacing:1}}>עובד</span>}
               </div>
             ))}
@@ -737,6 +737,8 @@ export default function JudoTV() {
   const [soundType, setSoundType] = useState("beep");
   const [scale, setScale] = useState(1.0);
   const [toolbarOpen, setToolbarOpen] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [notesOpen, setNotesOpen] = useState(true);
 
   const intervalRef = useRef(null);
   const alertRef    = useRef(null);
@@ -910,74 +912,56 @@ export default function JudoTV() {
         </div>
 
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,padding:"6px 12px",borderRadius:9,border:"1px solid rgba(255,255,255,0.08)",background:"rgba(255,255,255,0.03)"}}>
-            <span style={{color:"rgba(255,255,255,0.35)",fontSize:12}}>מעבר אוטו׳</span>
-            <Toggle value={globalAutoNext} onChange={setGlobalAutoNext}/>
-          </div>
-          <div style={{display:"flex",alignItems:"center",gap:4,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"4px 6px"}}>
-            <button onClick={() => setScale(s => Math.max(0.5, Math.round((s-0.1)*10)/10))} style={{background:"none",border:"none",color:"rgba(255,255,255,0.55)",cursor:"pointer",fontSize:18,fontWeight:700,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6}}>−</button>
-            <span style={{color:"rgba(255,255,255,0.35)",fontFamily:"monospace",fontSize:12,minWidth:36,textAlign:"center"}}>{Math.round(scale*100)}%</span>
-            <button onClick={() => setScale(s => Math.min(1.5, Math.round((s+0.1)*10)/10))} style={{background:"none",border:"none",color:"rgba(255,255,255,0.55)",cursor:"pointer",fontSize:18,fontWeight:700,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6}}>+</button>
-          </div>
-          <select value={soundType} onChange={e => setSoundType(e.target.value)} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:"rgba(255,255,255,0.5)",borderRadius:9,padding:"8px 10px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13,outline:"none"}}>
-            <option value="beep">🔔 ביפ</option>
-            <option value="buzz">⚡ באזר</option>
-            <option value="mute">🔇 שקט</option>
-          </select>
-          <button onClick={() => setModal("workouts")} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:"rgba(255,255,255,0.5)",borderRadius:9,padding:"8px 14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13}}>📅</button>
           <button onClick={() => { setRunning(false); setModal("edit"); }} style={{background:"rgba(255,107,0,0.1)",border:"1px solid rgba(255,107,0,0.28)",color:"#FF6B00",borderRadius:9,padding:"8px 14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:13}}>✏️ ערוך</button>
+          <button onClick={() => setToolbarOpen(o=>!o)} style={{background:toolbarOpen?"rgba(255,107,0,0.2)":"rgba(255,255,255,0.05)",border:toolbarOpen?"1px solid rgba(255,107,0,0.5)":"1px solid rgba(255,255,255,0.1)",color:toolbarOpen?"#FF6B00":"rgba(255,255,255,0.6)",borderRadius:9,padding:"8px 16px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:15}}>☰</button>
         </div>
       </div>
 
       {/* BODY */}
       <div style={{flex:1,display:"flex",overflow:"hidden",padding:"14px 22px",gap:16,position:"relative",zIndex:1,flexDirection:"row"}}>
 
-        {/* LEFT: drill list */}
-        <div style={{width:leftW,display:"flex",flexDirection:"column",flexShrink:0,position:"relative",minWidth:140,maxWidth:360}}>
-          <div
-            onMouseDown={e => {
-              const startX = e.clientX, startW = leftW;
-              const move = ev => setLeftW(Math.min(360, Math.max(140, startW + (ev.clientX - startX))));
-              const up = () => { window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up); };
-              window.addEventListener("mousemove",move); window.addEventListener("mouseup",up);
-            }}
-            onTouchStart={e => {
-              const startX = e.touches[0].clientX, startW = leftW;
-              const move = ev => setLeftW(Math.min(360, Math.max(140, startW + (ev.touches[0].clientX - startX))));
-              const up = () => { window.removeEventListener("touchmove",move); window.removeEventListener("touchend",up); };
-              window.addEventListener("touchmove",move,{passive:false}); window.addEventListener("touchend",up);
-            }}
-            style={{position:"absolute",left:-4,top:0,bottom:0,width:16,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none"}}>
-            <div style={{width:3,height:40,borderRadius:2,background:"rgba(255,107,0,0.4)"}}/>
-          </div>
-          <div style={{color:"rgba(255,255,255,0.18)",fontSize:10,letterSpacing:4,textTransform:"uppercase",marginBottom:9}}>מערך האימון</div>
-          <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:3}}>
-            {drills.map((d,i) => {
-              const done=i<drillIdx, curr=i===drillIdx;
-              const sc=SEC_COLOR[d.section||"warmup"];
-              return (
-                <div key={d.id} onClick={() => goToDrill(i)} style={{background:curr?"rgba(255,107,0,0.11)":done?"rgba(255,255,255,0.01)":"rgba(255,255,255,0.03)",border:curr?"1px solid rgba(255,107,0,0.45)":"1px solid rgba(255,255,255,0.045)",borderRadius:9,padding:"8px 11px",cursor:"pointer",display:"flex",alignItems:"center",gap:7,opacity:done?0.33:1,transition:"all 0.18s"}}>
-                  <div style={{width:3,height:28,borderRadius:2,background:sc,flexShrink:0}}/>
-                  <span style={{width:20,height:20,borderRadius:"50%",background:curr?"#FF6B00":"rgba(255,255,255,0.045)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:curr?"#fff":"rgba(255,255,255,0.28)",flexShrink:0}}>{done?"v":i+1}</span>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:curr?"#fff":"rgba(255,255,255,0.52)",fontSize:13,fontWeight:curr?700:400,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.name}</div>
-                    <div style={{color:sc,fontSize:10,marginTop:1}}>{d.type!=="rest"?d.rounds+"x · ":""}{fmt(totalDrillTime(d))}</div>
-                  </div>
-                  {curr&&running&&<div style={{width:5,height:5,borderRadius:"50%",background:"#FF6B00",animation:"pulse 0.9s infinite",flexShrink:0}}/>}
-                  {d.autoNext&&<div style={{width:5,height:5,borderRadius:"50%",background:"rgba(168,255,120,0.5)",flexShrink:0}}/>}
+        {/* LEFT: Notes panel (collapsible) */}
+        {notesOpen ? (
+          <div style={{width:220,display:"flex",flexDirection:"column",flexShrink:0,gap:8}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{color:"rgba(255,255,255,0.18)",fontSize:10,letterSpacing:4,textTransform:"uppercase"}}>הערות אימון</span>
+              <button onClick={() => setNotesOpen(false)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.3)",cursor:"pointer",fontSize:18,padding:4,lineHeight:1}}>✕</button>
+            </div>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder={"הערות, דגשים לאימון..."}
+              style={{
+                flex:1,minHeight:220,
+                background:"rgba(255,255,255,0.04)",
+                border:"1px solid rgba(255,255,255,0.08)",
+                borderRadius:10,color:"#fff",
+                padding:"12px",fontFamily:"Heebo,sans-serif",
+                fontSize:14,lineHeight:1.6,
+                resize:"none",outline:"none",direction:"rtl",
+              }}
+            />
+            <div style={{paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.045)",display:"flex",flexDirection:"column",gap:5}}>
+              {[["זמן שעבר",fmt(totalElapsed)],["סה"כ",fmt(totalDur)]].map(([l,v]) => (
+                <div key={l} style={{display:"flex",justifyContent:"space-between"}}>
+                  <span style={{color:"rgba(255,255,255,0.22)",fontSize:11}}>{l}</span>
+                  <span style={{color:"#fff",fontFamily:"Oswald,sans-serif",fontSize:19}}>{v}</span>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
-          <div style={{paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.045)",marginTop:7,display:"flex",flexDirection:"column",gap:5}}>
-            {[["זמן שעבר",fmt(totalElapsed)],["סה\"כ",fmt(totalDur)]].map(([l,v]) => (
-              <div key={l} style={{display:"flex",justifyContent:"space-between"}}>
-                <span style={{color:"rgba(255,255,255,0.22)",fontSize:11}}>{l}</span>
-                <span style={{color:"#fff",fontFamily:"Oswald,sans-serif",fontSize:19}}>{v}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        ) : (
+          <button onClick={() => setNotesOpen(true)} style={{
+            width:32,flexShrink:0,
+            background:"rgba(255,255,255,0.04)",
+            border:"1px solid rgba(255,255,255,0.08)",
+            borderRadius:10,color:"rgba(255,255,255,0.35)",
+            cursor:"pointer",display:"flex",alignItems:"center",
+            justifyContent:"center",fontFamily:"Heebo,sans-serif",
+            fontSize:11,letterSpacing:2,padding:"12px 0",
+            writingMode:"vertical-rl",
+          }}>📝 הערות</button>
+        )}
 
         {/* CENTER */}
         <div style={{flex:1,display:"flex",flexDirection:"column",gap:10,minWidth:0}}>
