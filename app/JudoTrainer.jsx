@@ -199,10 +199,10 @@ function useSound(soundType) {
     if (soundType === "mute") return;
     if (soundType === "buzz") {
       playBuzz(180, 0.08, 0.3, 0);
-      playBuzz(180, 0.08, 0.3, 0.16);
+      playBuzz(180, 0.32, 0.3, 0.16);
     } else {
       playBeep(1000, 0.09, 0.5, 0);
-      playBeep(1000, 0.09, 0.5, 0.16);
+      playBeep(1000, 0.32, 0.5, 0.16);
     }
   }, [soundType, playBeep, playBuzz]);
 
