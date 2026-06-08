@@ -942,7 +942,7 @@ export default function JudoTV() {
               }}
             />
             <div style={{paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.045)",display:"flex",flexDirection:"column",gap:5}}>
-              {[["זמן שעבר",fmt(totalElapsed)],["סה"כ",fmt(totalDur)]].map(([l,v]) => (
+              {[["זמן שעבר",fmt(totalElapsed)],["סה\"כ",fmt(totalDur)]].map(([l,v]) => (
                 <div key={l} style={{display:"flex",justifyContent:"space-between"}}>
                   <span style={{color:"rgba(255,255,255,0.22)",fontSize:11}}>{l}</span>
                   <span style={{color:"#fff",fontFamily:"Oswald,sans-serif",fontSize:19}}>{v}</span>
