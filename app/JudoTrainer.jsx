@@ -174,32 +174,39 @@ function useSound(soundType) {
     } catch(e) {}
   }, [getCtx]);
 
-  // Flex Timer countdown: 3 identical short sharp beeps at t=3,2,1
-  // Then a distinct longer end signal
+  // Interval-Timer style countdown: 3 short sharp beeps at t=3,2,1
   const tickBeep = useCallback((t) => {
     if (soundType === "mute") return;
     if (soundType === "buzz") {
       playBuzz(180, 0.08, 0.3, 0);
     } else {
-      // 1000Hz — the classic gym timer warning tone
       playBeep(1000, 0.09, 0.5, 0);
     }
   }, [soundType, playBeep, playBuzz]);
 
-  // Flex Timer end signal:
-  // "beep" mode: one long high beep (800Hz, 0.8s) — clean and authoritative
-  // "buzz" mode: long sawtooth buzz like an electric buzzer
-  const endBeep = useCallback(() => {
+  // Start-of-time signal — one long beep
+  const startBeep = useCallback(() => {
     if (soundType === "mute") return;
     if (soundType === "buzz") {
       playBuzz(150, 0.7, 0.5, 0);
     } else {
-      // Long single beep — Flex Timer / GymNext end-of-round signature
       playBeep(800, 0.75, 0.65, 0);
     }
   }, [soundType, playBeep, playBuzz]);
 
-  return { tickBeep, endBeep, initCtx };
+  // End-of-time signal — two short beeps fired together, right after the 3 countdown beeps
+  const endBeep = useCallback(() => {
+    if (soundType === "mute") return;
+    if (soundType === "buzz") {
+      playBuzz(180, 0.08, 0.3, 0);
+      playBuzz(180, 0.08, 0.3, 0.16);
+    } else {
+      playBeep(1000, 0.09, 0.5, 0);
+      playBeep(1000, 0.09, 0.5, 0.16);
+    }
+  }, [soundType, playBeep, playBuzz]);
+
+  return { tickBeep, endBeep, startBeep, initCtx };
 }
 
 // ── Time Picker ───────────────────────────────────────────────────────────────
@@ -752,7 +759,7 @@ export default function JudoTV() {
 
   const intervalRef = useRef(null);
   const alertRef    = useRef(null);
-  const { tickBeep, endBeep, initCtx } = useSound(soundType);
+  const { tickBeep, endBeep, startBeep, initCtx } = useSound(soundType);
 
   const current    = drills[drillIdx] || drills[0];
   const phases     = getDrillPhases(current);
@@ -871,7 +878,8 @@ export default function JudoTV() {
   const pct = timeLeft / (phase.duration || 1);
   const urgent  = pct < 0.2 || alertActive;
   const warning = pct < 0.35 && pct >= 0.2;
-  const timerColor = (isRestPhase||isRest) ? "#a8ff78" : alertActive ? "#ff3c3c" : !running ? "#ff4444" : urgent ? "#FF6B00" : warning ? "#ffb347" : "#00ff88";
+  const notStarted = timeLeft === phase.duration;
+  const timerColor = (isRestPhase||isRest) ? "#a8ff78" : alertActive ? "#ff3c3c" : !running ? (notStarted ? "#ffffff" : "#ff4444") : urgent ? "#FF6B00" : warning ? "#ffb347" : "#00ff88";
 
   const totalDur  = drills.reduce((a,d) => a+totalDrillTime(d), 0);
   const doneDur   = drills.slice(0,drillIdx).reduce((a,d) => a+totalDrillTime(d), 0);
@@ -951,7 +959,7 @@ export default function JudoTV() {
                 const up = () => { window.removeEventListener("touchmove",move); window.removeEventListener("touchend",up); };
                 window.addEventListener("touchmove",move,{passive:false}); window.addEventListener("touchend",up);
               }}
-              style={{position:"absolute",left:-12,top:0,bottom:0,width:16,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none"}}>
+              style={{position:"absolute",left:-10,top:0,bottom:0,width:20,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none"}}>
               <div style={{width:3,height:40,borderRadius:2,background:"rgba(255,107,0,0.4)"}}/>
             </div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -1048,7 +1056,7 @@ export default function JudoTV() {
 
           <div style={{display:"flex",gap:9,justifyContent:"center",flexWrap:"wrap"}}>
             <button onClick={() => goToDrill(drillIdx-1)} disabled={drillIdx===0} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:drillIdx===0?"rgba(255,255,255,0.1)":"#fff",borderRadius:11,padding:"13px 20px",cursor:drillIdx===0?"not-allowed":"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:17}}>קודם</button>
-            <button onClick={() => { initCtx(); setRunning(r=>!r); }} style={{background:running?"linear-gradient(135deg,#ff4444,#a82020)":"linear-gradient(135deg,#2ecc71,#1f9c54)",border:"none",color:"#fff",borderRadius:13,padding:"13px 48px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:900,fontSize:21,boxShadow:running?"0 5px 22px rgba(255,68,68,0.38)":"0 5px 22px rgba(46,204,113,0.38)",minWidth:150}}>{running?"⏸ עצור":"▶ הפעל"}</button>
+            <button onClick={() => { initCtx(); setRunning(r => { const next = !r; if (next) startBeep(); return next; }); }} style={{background:running?"linear-gradient(135deg,#ff4444,#a82020)":"linear-gradient(135deg,#2ecc71,#1f9c54)",border:"none",color:"#fff",borderRadius:13,padding:"13px 48px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:900,fontSize:21,boxShadow:running?"0 5px 22px rgba(255,68,68,0.38)":"0 5px 22px rgba(46,204,113,0.38)",minWidth:150}}>{running?"⏸ עצור":"▶ הפעל"}</button>
             <button onClick={nextPhaseManual} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:"#fff",borderRadius:11,padding:"13px 20px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:17}}>הבא</button>
           </div>
 
@@ -1073,7 +1081,7 @@ export default function JudoTV() {
               const up = () => { window.removeEventListener("touchmove",move); window.removeEventListener("touchend",up); };
               window.addEventListener("touchmove",move,{passive:false}); window.addEventListener("touchend",up);
             }}
-            style={{position:"absolute",right:-12,top:0,bottom:0,width:16,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none"}}>
+            style={{position:"absolute",right:-10,top:0,bottom:0,width:20,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none"}}>
             <div style={{width:3,height:40,borderRadius:2,background:"rgba(255,107,0,0.4)"}}/>
           </div>
           <div style={{color:"rgba(255,255,255,0.18)",fontSize:10,letterSpacing:4,textTransform:"uppercase",marginBottom:9}}>מערך האימון</div>
