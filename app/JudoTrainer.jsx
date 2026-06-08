@@ -384,6 +384,8 @@ function EditorModal({ drills, setDrills, currentIndex, judokas, setJudokas, pai
   const [tab, setTab] = useState("drills");
   const [localJudokas, setLocalJudokas] = useState(judokas.map(j=>({...j})));
   const [localPairs, setLocalPairs] = useState(pairs.map(p=>[...p]));
+  const [judokaGroupFilter, setJudokaGroupFilter] = useState("כל הנבחרת");
+  const [newGroupName, setNewGroupName] = useState("");
 
   useEffect(() => {
     supa("drill_library?order=created_at.desc").then(r => { if(r) setLibrary(r); });
@@ -400,15 +402,15 @@ function EditorModal({ drills, setDrills, currentIndex, judokas, setJudokas, pai
 
   const inp = {background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,107,0,0.3)",borderRadius:8,color:"#fff",padding:"7px 10px",fontFamily:"Heebo,sans-serif",fontSize:14,outline:"none"};
 
-  const tabBtn = (key, label) => (
-    <button onClick={() => setTab(key)} style={{background:tab===key?"#FF6B00":"rgba(255,255,255,0.05)",border:"none",color:tab===key?"#fff":"rgba(255,255,255,0.45)",borderRadius:8,padding:"9px 18px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:14}}>{label}</button>
+  const tabBtn = (key, label, id) => (
+    <button id={id} onClick={() => setTab(key)} style={{background:tab===key?"#FF6B00":"rgba(255,255,255,0.05)",border:"none",color:tab===key?"#fff":"rgba(255,255,255,0.45)",borderRadius:8,padding:"9px 18px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:14}}>{label}</button>
   );
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{background:"#0d1020",border:"1px solid rgba(255,107,0,0.28)",borderRadius:18,width:"100%",maxWidth:760,maxHeight:"92vh",overflowY:"auto",padding:22,direction:"rtl"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <div style={{display:"flex",gap:6}}>{tabBtn("drills","תרגילים")}{tabBtn("judokas","חברי הנבחרת")}{tabBtn("pairs","זוגות")}</div>
+          <div style={{display:"flex",gap:6}}>{tabBtn("drills","תרגילים")}{tabBtn("judokas","חברי הנבחרת","tab-judokas")}{tabBtn("pairs","זוגות")}</div>
           <button onClick={() => { setDrills(list); setJudokas(localJudokas); setPairs(localPairs); onClose(); }} style={{background:"#FF6B00",border:"none",color:"#fff",borderRadius:10,padding:"10px 22px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:15}}>שמור וסגור</button>
         </div>
 
@@ -488,18 +490,26 @@ function EditorModal({ drills, setDrills, currentIndex, judokas, setJudokas, pai
 
         {tab === "judokas" && (
           <div>
-            {localJudokas.map(j => (
+            {/* Group filter */}
+            <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
+              {["כל הנבחרת",...new Set(localJudokas.map(j=>j.group).filter(Boolean))].map(g => (
+                <button key={g} onClick={() => setJudokaGroupFilter(g)} style={{background:judokaGroupFilter===g?"#FF6B00":"rgba(255,255,255,0.05)",border:"none",color:judokaGroupFilter===g?"#fff":"rgba(255,255,255,0.5)",borderRadius:20,padding:"5px 14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13}}>{g}</button>
+              ))}
+              <button onClick={() => { const g=prompt("שם הקבוצה:"); if(g) setNewGroupName(g); }} style={{background:"rgba(255,255,255,0.04)",border:"1px dashed rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.4)",borderRadius:20,padding:"5px 14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13}}>+ קבוצה חדשה</button>
+            </div>
+            {localJudokas.filter(j => judokaGroupFilter==="כל הנבחרת" || j.group===judokaGroupFilter).map(j => (
               <div key={j.id} style={{background:"rgba(255,255,255,0.025)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:10,marginBottom:7,padding:"11px 15px",display:"flex",alignItems:"center",gap:10}}>
-                <div style={{width:10,height:10,borderRadius:"50%",background:j.color==="white"?"#eee":"#1a5fd6",flexShrink:0}}/>
+                <div style={{width:10,height:10,borderRadius:"50%",background:"#FF6B00",flexShrink:0}}/>
                 <span style={{color:"#fff",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:15,flex:1}}>{j.name}</span>
-                <select value={j.color} onChange={e => setLocalJudokas(localJudokas.map(x=>x.id===j.id?{...x,color:e.target.value}:x))} style={{...inp,width:85,padding:"5px 8px",fontSize:13}}>
-                  <option value="white">לבן</option>
-                  <option value="blue">כחול</option>
+                {j.group && <span style={{color:"rgba(255,255,255,0.3)",fontSize:12,background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"3px 10px"}}>{j.group}</span>}
+                <select value={j.group||""} onChange={e => setLocalJudokas(localJudokas.map(x=>x.id===j.id?{...x,group:e.target.value}:x))} style={{...inp,width:100,padding:"4px 7px",fontSize:12}}>
+                  <option value="">ללא קבוצה</option>
+                  {[...new Set(localJudokas.map(j=>j.group).filter(Boolean))].map(g=><option key={g} value={g}>{g}</option>)}
                 </select>
                 <button onClick={() => setLocalJudokas(localJudokas.filter(x=>x.id!==j.id))} style={{background:"none",border:"none",color:"rgba(255,60,60,0.5)",cursor:"pointer",fontSize:17}}>x</button>
               </div>
             ))}
-            <button onClick={() => { const name=prompt("שם הגודוקה:"); if(name) setLocalJudokas([...localJudokas,{id:Date.now(),name,color:"white",personalDrills:[]}]); }} style={{background:"rgba(255,107,0,0.1)",border:"1px dashed rgba(255,107,0,0.35)",color:"#FF6B00",borderRadius:10,padding:"10px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:14,width:"100%",marginTop:6}}>+ הוסף חבר/ת נבחרת</button>
+            <button onClick={() => { const name=prompt("שם חבר/ת נבחרת:"); if(name) setLocalJudokas([...localJudokas,{id:Date.now(),name,color:"white",group:"",personalDrills:[]}]); }} style={{background:"rgba(255,107,0,0.1)",border:"1px dashed rgba(255,107,0,0.35)",color:"#FF6B00",borderRadius:10,padding:"10px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:14,width:"100%",marginTop:6}}>+ הוסף חבר/ת נבחרת</button>
           </div>
         )}
 
@@ -912,7 +922,7 @@ export default function JudoTV() {
         </div>
 
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <button onClick={() => { setRunning(false); setModal("edit"); }} style={{background:"rgba(255,107,0,0.1)",border:"1px solid rgba(255,107,0,0.28)",color:"#FF6B00",borderRadius:9,padding:"8px 14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:13}}>✏️ ערוך</button>
+          <button onClick={() => { setRunning(false); setModal("edit"); }} style={{background:"rgba(255,107,0,0.1)",border:"1px solid rgba(255,107,0,0.28)",color:"#FF6B00",borderRadius:9,padding:"8px 14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:13}}>✏️ ערוך אימון</button>
           <button onClick={() => setToolbarOpen(o=>!o)} style={{background:toolbarOpen?"rgba(255,107,0,0.2)":"rgba(255,255,255,0.05)",border:toolbarOpen?"1px solid rgba(255,107,0,0.5)":"1px solid rgba(255,255,255,0.1)",color:toolbarOpen?"#FF6B00":"rgba(255,255,255,0.6)",borderRadius:9,padding:"8px 16px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:15}}>☰</button>
         </div>
       </div>
@@ -1016,95 +1026,41 @@ export default function JudoTV() {
             {nextPhase ? "הבא: "+nextPhase.label+" "+fmt(nextPhase.duration) : nextDrill ? "תרגיל הבא: "+nextDrill.name : ""}
           </div>
 
-          {/* WHO WORKS PANEL — below timer */}
-          {!isPersonal ? (
-            <div style={{background:"rgba(255,255,255,0.018)",border:(isRestPhase||isRest)?"1px solid rgba(168,255,120,0.14)":"1px solid rgba(255,255,255,0.055)",borderRadius:14,padding:"12px 16px",animation:(isRestPhase||isRest)?"restGlow 2s infinite":"none",transition:"border 0.5s"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                <span style={{color:"rgba(255,255,255,0.22)",fontSize:10,letterSpacing:3,textTransform:"uppercase"}}>מי עובד עכשיו</span>
-                <span style={{color:(isRestPhase||isRest)?"#a8ff78":secColor,fontSize:12,fontWeight:700}}>{(isRestPhase||isRest)?"מנוחה":phase.label}</span>
-              </div>
-              <SplitPanel pairs={pairs} judokas={judokas} who={(isRestPhase||isRest)?"none":phase.who} showNames={isPartner}/>
-            </div>
-          ) : (
-            <div style={{background:"rgba(255,255,255,0.018)",border:"1px solid rgba(160,255,120,0.16)",borderRadius:14,padding:"12px 16px"}}>
-              <div style={{color:"rgba(160,255,120,0.7)",fontSize:10,letterSpacing:3,textTransform:"uppercase",marginBottom:10}}>עבודה אישית</div>
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {judokas.map(j => {
-                  const pt=personalTimers[j.id];
-                  const drill=j.personalDrills&&j.personalDrills[pt?pt.drillIdx:0];
-                  const tl=pt?pt.timeLeft:(drill?drill.duration:0);
-                  const urgent2=(tl/(drill?drill.duration:1))<0.25;
-                  return (
-                    <div key={j.id} style={{borderRadius:10,padding:"8px 12px",background:j.color==="white"?"linear-gradient(135deg,rgba(255,255,255,0.09),rgba(255,255,255,0.03))":"linear-gradient(135deg,rgba(26,95,214,0.18),rgba(0,59,142,0.09))",border:j.color==="white"?"1px solid rgba(255,255,255,0.2)":"1px solid rgba(26,95,214,0.38)",display:"flex",alignItems:"center",gap:10}}>
-                      <div style={{width:8,height:8,borderRadius:"50%",background:j.color==="white"?"#ccc":"#1a5fd6",flexShrink:0}}/>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{color:"#fff",fontWeight:700,fontSize:13}}>{j.name}</div>
-                        <div style={{color:"rgba(255,255,255,0.35)",fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{drill?drill.name:"סיים"}</div>
-                      </div>
-                      <div style={{fontFamily:"Oswald,sans-serif",fontWeight:700,fontSize:22,color:urgent2?"#ff3c3c":"#fff",minWidth:58,textAlign:"right"}}>{fmt(tl)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* RIGHT — removed, panel moved below timer */}
-        <div style={{width:rightW,flexShrink:0,display:"flex",flexDirection:"column",gap:10,position:"relative",minWidth:180,maxWidth:500}}>
-          <div
-            onMouseDown={e => {
-              const startX = e.clientX, startW = rightW;
-              const move = ev => setRightW(Math.min(500, Math.max(180, startW - (ev.clientX - startX))));
-              const up = () => { window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up); };
-              window.addEventListener("mousemove",move); window.addEventListener("mouseup",up);
-            }}
-            onTouchStart={e => {
-              const startX = e.touches[0].clientX, startW = rightW;
-              const move = ev => setRightW(Math.min(500, Math.max(180, startW - (ev.touches[0].clientX - startX))));
-              const up = () => { window.removeEventListener("touchmove",move); window.removeEventListener("touchend",up); };
-              window.addEventListener("touchmove",move,{passive:false}); window.addEventListener("touchend",up);
-            }}
-            style={{position:"absolute",right:-4,top:0,bottom:0,width:16,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none"}}>
-            <div style={{width:3,height:40,borderRadius:2,background:"rgba(255,107,0,0.4)"}}/>
+        {/* RIGHT: drill list */}
+        <div style={{width:240,display:"flex",flexDirection:"column",flexShrink:0}}>
+          <div style={{color:"rgba(255,255,255,0.18)",fontSize:10,letterSpacing:4,textTransform:"uppercase",marginBottom:9}}>מערך האימון</div>
+          <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:3}}>
+            {drills.map((d,i) => {
+              const done=i<drillIdx, curr=i===drillIdx;
+              const sc=SEC_COLOR[d.section||"warmup"];
+              return (
+                <div key={d.id} onClick={() => goToDrill(i)} style={{background:curr?"rgba(255,107,0,0.11)":done?"rgba(255,255,255,0.01)":"rgba(255,255,255,0.03)",border:curr?"1px solid rgba(255,107,0,0.45)":"1px solid rgba(255,255,255,0.045)",borderRadius:9,padding:"8px 11px",cursor:"pointer",display:"flex",alignItems:"center",gap:7,opacity:done?0.33:1,transition:"all 0.18s"}}>
+                  <div style={{width:3,height:28,borderRadius:2,background:sc,flexShrink:0}}/>
+                  <span style={{width:20,height:20,borderRadius:"50%",background:curr?"#FF6B00":"rgba(255,255,255,0.045)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:curr?"#fff":"rgba(255,255,255,0.28)",flexShrink:0}}>{done?"✓":i+1}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:curr?"#fff":"rgba(255,255,255,0.52)",fontSize:13,fontWeight:curr?700:400,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.name}</div>
+                    <div style={{color:sc,fontSize:10,marginTop:1}}>{d.type!=="rest"?d.rounds+"x · ":""}{fmt(totalDrillTime(d))}</div>
+                  </div>
+                  {curr&&running&&<div style={{width:5,height:5,borderRadius:"50%",background:"#FF6B00",animation:"pulse 0.9s infinite",flexShrink:0}}/>}
+                  {d.autoNext&&<div style={{width:5,height:5,borderRadius:"50%",background:"rgba(168,255,120,0.5)",flexShrink:0}}/>}
+                </div>
+              );
+            })}
           </div>
-          {!isPersonal ? (
-            <div style={{background:"rgba(255,255,255,0.018)",border:(isRestPhase||isRest)?"1px solid rgba(168,255,120,0.14)":"1px solid rgba(255,255,255,0.055)",borderRadius:14,padding:"15px 16px",flex:1,display:"flex",flexDirection:"column",animation:(isRestPhase||isRest)?"restGlow 2s infinite":"none",transition:"border 0.5s"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                <span style={{color:"rgba(255,255,255,0.22)",fontSize:10,letterSpacing:3,textTransform:"uppercase"}}>זוגות</span>
-                <span style={{color:(isRestPhase||isRest)?"#a8ff78":secColor,fontSize:12,fontWeight:700}}>{(isRestPhase||isRest)?"מנוחה":phase.label}</span>
+          <div style={{paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.045)",marginTop:7,display:"flex",flexDirection:"column",gap:5}}>
+            {[["זמן שעבר",fmt(totalElapsed)],["סה\"כ",fmt(totalDur)]].map(([l,v]) => (
+              <div key={l} style={{display:"flex",justifyContent:"space-between"}}>
+                <span style={{color:"rgba(255,255,255,0.22)",fontSize:11}}>{l}</span>
+                <span style={{color:"#fff",fontFamily:"Oswald,sans-serif",fontSize:19}}>{v}</span>
               </div>
-              <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"center"}}>
-                <SplitPanel pairs={pairs} judokas={judokas} who={(isRestPhase||isRest)?"none":phase.who} showNames={isPartner}/>
-              </div>
-            </div>
-          ) : (
-            <div style={{background:"rgba(255,255,255,0.018)",border:"1px solid rgba(160,255,120,0.16)",borderRadius:14,padding:"15px 16px",flex:1,display:"flex",flexDirection:"column"}}>
-              <div style={{color:"rgba(160,255,120,0.7)",fontSize:10,letterSpacing:3,textTransform:"uppercase",marginBottom:12}}>עבודה אישית</div>
-              <div style={{display:"flex",flexDirection:"column",gap:6,flex:1,justifyContent:"center"}}>
-                {judokas.map(j => {
-                  const pt=personalTimers[j.id];
-                  const drill=j.personalDrills&&j.personalDrills[pt?pt.drillIdx:0];
-                  const tl=pt?pt.timeLeft:(drill?drill.duration:0);
-                  const urgent=(tl/(drill?drill.duration:1))<0.25;
-                  return (
-                    <div key={j.id} style={{borderRadius:10,padding:"10px 13px",background:j.color==="white"?"linear-gradient(135deg,rgba(255,255,255,0.09),rgba(255,255,255,0.03))":"linear-gradient(135deg,rgba(26,95,214,0.18),rgba(0,59,142,0.09))",border:j.color==="white"?"1px solid rgba(255,255,255,0.2)":"1px solid rgba(26,95,214,0.38)",display:"flex",alignItems:"center",gap:10}}>
-                      <div style={{width:8,height:8,borderRadius:"50%",background:j.color==="white"?"#ccc":"#1a5fd6",flexShrink:0}}/>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{color:"#fff",fontWeight:700,fontSize:14}}>{j.name}</div>
-                        <div style={{color:"rgba(255,255,255,0.35)",fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{drill?drill.name:"סיים"}</div>
-                      </div>
-                      <div style={{fontFamily:"Oswald,sans-serif",fontWeight:700,fontSize:24,color:urgent?"#ff3c3c":"#fff",minWidth:62,textAlign:"right"}}>{fmt(tl)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
-      </div>
 
       </div>
+
       {/* BOTTOM TOOLBAR */}
       {toolbarOpen && (
         <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:100,direction:"rtl"}}>
@@ -1123,7 +1079,8 @@ export default function JudoTV() {
 
             {/* Row 2: Attendance */}
             <div style={{display:"flex",gap:12}}>
-              <button onClick={() => { setModal("attendance"); setToolbarOpen(false); }} style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.7)",borderRadius:12,padding:"14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:16}}>👥 נוכחות היום</button>
+              <button onClick={() => { setModal("attendance"); setToolbarOpen(false); }} style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.7)",borderRadius:12,padding:"14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:16}}>📋 נוכחות היום</button>
+              <button onClick={() => { setRunning(false); setModal("edit"); setToolbarOpen(false); setTimeout(()=>document.getElementById("tab-judokas")?.click(),100); }} style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.7)",borderRadius:12,padding:"14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:16}}>👥 חברי הנבחרת</button>
             </div>
 
             {/* Row 3: Sound settings */}
@@ -1152,6 +1109,7 @@ export default function JudoTV() {
       {modal==="edit" && <EditorModal drills={drills} setDrills={d=>{setDrills(d);if(drillIdx>=d.length)setDrillIdx(Math.max(0,d.length-1));}} currentIndex={drillIdx} judokas={judokas} setJudokas={setJudokas} pairs={pairs} setPairs={setPairs} onClose={()=>setModal(null)}/>}
       {modal==="workouts" && <WorkoutModal drills={drills} judokas={judokas} pairs={pairs} onLoad={w=>{if(w.drills)setDrills(w.drills);if(w.judokas)setJudokas(w.judokas);if(w.pairs)setPairs(w.pairs);setDrillIdx(0);setRunning(false);}} onClose={()=>setModal(null)}/>}
       {modal==="attendance" && <AttendanceModal judokas={judokas} onClose={()=>setModal(null)}/>}
+      </div>
     </div>
   );
 }
