@@ -11,12 +11,23 @@ Supabase: `BGU-JUDO-SUP` — `https://oakbpcjxjunppuyddpsj.supabase.co`
 ```
 JUDO-BGU/
 ├── app/
-│   ├── page.js          — מייבא את JudoTrainer
-│   ├── layout.js        — PWA meta tags + manifest
-│   └── JudoTrainer.jsx  — כל הלוגיקה והUI (1100+ שורות)
+│   ├── page.js               — מסך הטלויזיה (מייבא את JudoTrainer)
+│   ├── layout.js             — PWA meta tags + manifest + viewport
+│   ├── JudoTrainer.jsx       — מסך הטלויזיה: כל הלוגיקה והUI
+│   ├── remote/
+│   │   ├── page.js           — /remote — השלט בנייד
+│   │   └── RemoteControl.jsx — UI השלט (טיוטה פרטית + שליחה למסך)
+│   └── lib/
+│       ├── shared.js         — קבועים, fmt, getDrillPhases, לקוח Supabase
+│       ├── ui.jsx            — TimeWheel / TimePicker / Toggle / DrillForm
+│       ├── remoteBus.js      — ערוץ Supabase Realtime broadcast (WebSocket)
+│       ├── remoteProtocol.js — הודעות בין המסך לשלט
+│       ├── link.js           — useTvLink / useRemoteLink
+│       └── wakeLock.js       — מונע כיבוי מסך במהלך אימון
 ├── public/
-│   └── manifest.json    — PWA manifest (fullscreen, landscape)
-└── package.json         — Next.js 14, React 18
+│   ├── manifest.json         — PWA למסך (fullscreen, landscape)
+│   └── remote-manifest.json  — PWA לשלט (standalone, portrait)
+└── package.json              — Next.js 14, React 18
 ```
 
 ---
@@ -125,6 +136,47 @@ attendance (id, date, present_ids jsonb, total, created_at)
 
 ---
 
+---
+
+## 📱 שלט רחוק (טלויזיה + נייד)
+
+המסך מוקרן בטלויזיה, והמאמן שולט ממנו מהנייד — בלי שכל הקבוצה תראה מה הוא עורך.
+
+### חיבור
+1. במסך הטלויזיה מופיע **קוד חיבור** בן 4 תווים (בסרגל העליון, או ☰ ← 📱 שלט רחוק).
+2. בנייד פותחים `‎/remote` ומקלידים את הקוד. אפשר גם `‎/remote?code=XXXX`.
+3. הקוד נשמר ב-localStorage בשני הצדדים — חיבור חוזר אוטומטי.
+
+### מה מיידי ומה נשמר בטיוטה
+| פעולה | מתי המסך מתעדכן |
+|---|---|
+| ▶ התחל / המשך | **מיד** — ושולח קודם את כל הטיוטה |
+| ⏸ עצור | **מיד** |
+| ✓ עדכן טלויזיה | **מיד** — שולח את הטיוטה |
+| שינוי זמנים, מעבר בין תרגילים | רק בשליחה (במצב פרטי) |
+| עריכת מערך, תרגילים, הערות, הגדרות | רק בשליחה — תמיד |
+
+בראש השלט יש מתג **🔒 מצב פרטי / 🔴 שידור ישיר**. בשידור ישיר כפתורי הזמן והניווט
+משפיעים על המסך מיד; עריכת המערך נשארת בטיוטה בכל מקרה.
+
+הפס הכתום בתחתית השלט מראה מה עדיין לא נשלח, עם כפתורי **בטל** ו-**✓ עדכן טלויזיה**.
+
+### 📺 מצב הקרנה
+מסתיר מהטלויזיה את כל כפתורי השליטה (זמנים, הפעל/עצור, זום, ערוך) ומשאיר תצוגה נקייה:
+שעון, שלבים, לבן/כחול, רשימת התרגילים. נשלט מהנייד או דרך ☰ בטלויזיה.
+
+### תשתית
+- ערוץ **Supabase Realtime broadcast** — פאב/סאב בלבד, ללא טבלה חדשה וללא תלות npm נוספת.
+  `app/lib/remoteBus.js` מדבר את פרוטוקול Phoenix ישירות מעל WebSocket, עם heartbeat
+  כל 25 שניות והתחברות מחדש עם backoff.
+- **הטלויזיה היא מקור האמת** ומריצה את השעון. השלט רק שולח פקודות ומשקף מצב,
+  כך שהשעון על המסך אף פעם לא תלוי בחיבור.
+- המסך משדר `tick` בכל שינייה ו-`full` כשהמערך משתנה; השלט מבקש `full` כשה-`rev` לא תואם.
+- **צליל:** דפדפנים מתירים AudioContext רק מתוך נגיעה אמיתית. לכן, כל עוד לא נגעו במסך,
+  מופיע שם באנר "🔊 לחצו כאן להפעלת הצלילים" — לחיצה אחת פותחת את הצלילים לכל האימון.
+
+---
+
 ## תפריט ☰ (תחתון)
 - ✏️ ערוך אימון
 - 📅 אימונים שמורים
@@ -158,3 +210,9 @@ attendance (id, date, present_ids jsonb, total, created_at)
 - **`'use client'`** חייב להיות שורה ראשונה בקובץ
 - **`סה"כ`** בתוך JSX strings — להשתמש ב-`סה\"כ` עם escape
 - הקובץ עבר babel parse validation לפני כל העלאה
+- **טיימר:** ה-`setInterval` של השעון קורא הכל דרך `tickCtxRef` ותלוי רק ב-`running`.
+  אם מוסיפים לו תלויות שמשתנות בכל רנדר (למשל `advancePhase` או `phases`) האינטרוול
+  נבנה מחדש בכל רנדר והשעון רץ לאט.
+- **איפוס שעון:** `drillClockSignature` קובע מתי מאפסים. שינוי שם/הערה של תרגיל לא
+  מאפס את השעון; שינוי משכים/סבבים/תבנית כן. `clockOverrideRef` מאפשר לשלט לכפות
+  מיקום שעון מדויק גם כשהאיפוס האוטומטי רץ באותו commit.
