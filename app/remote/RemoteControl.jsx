@@ -289,7 +289,7 @@ export default function RemoteControl() {
           >התחבר</button>
         </div>
         <div style={{color:"rgba(255,255,255,0.25)",fontSize:12,textAlign:"center",lineHeight:1.8}}>
-          הקוד מופיע בפינה העליונה של המסך,<br/>או דרך ☰ ← 📱 שלט רחוק
+          במסך הטלויזיה לוחצים על <span style={{color:"rgba(255,255,255,0.45)"}}>📱 שלט רחוק</span><br/>והקוד נפתח שם בחלון
         </div>
       </div>
     );

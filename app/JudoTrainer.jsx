@@ -499,39 +499,99 @@ function AttendanceModal({ judokas, onClose }) {
 }
 
 // ── Remote pairing ────────────────────────────────────────────────────────────
+// The code lives here and nowhere else. It is deliberately not on the always-on
+// display, so nobody can memorise it off the projection and join mid-training.
 function RemotePairingModal({ roomCode, remoteOn, setRemoteOn, onNewCode, status, connected, onClose }) {
   const [origin, setOrigin] = useState("");
-  useEffect(() => { try { setOrigin(window.location.origin); } catch(e) {} }, []);
-  const url = (origin || "") + "/remote";
+  const [copied, setCopied] = useState("");
 
-  const statusLabel = connected ? "שלט מחובר"
+  useEffect(() => { try { setOrigin(window.location.origin); } catch(e) {} }, []);
+
+  // Once a remote is on the line the code has done its job — get it off screen.
+  // onClose is a fresh closure on every render of the TV, so it is held in a ref;
+  // depending on it directly would restart the timeout before it ever fires.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (!connected) return;
+    const id = setTimeout(() => closeRef.current(), 2500);
+    return () => clearTimeout(id);
+  }, [connected]);
+
+  const remoteUrl = (origin || "") + "/remote";
+  const pairUrl   = remoteUrl + (roomCode ? "?code=" + roomCode : "");
+
+  const copy = (text, what) => {
+    const done = () => { setCopied(what); setTimeout(() => setCopied(""), 1800); };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, () => {});
+        return;
+      }
+    } catch(e) {}
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      done();
+    } catch(e) {}
+  };
+
+  const statusLabel = connected ? "השלט התחבר — סוגר"
     : status === "online" ? "ממתין לשלט…"
     : status === "connecting" ? "מתחבר…"
     : "אין חיבור לשרת";
   const statusColor = connected ? "#2ecc71" : status === "online" ? "#ffb347" : "#ff4444";
 
+  const linkBtn = {background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",color:"rgba(255,255,255,0.65)",borderRadius:10,padding:"11px 12px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13,fontWeight:700,flex:1};
+
   return (
-    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
-      <div style={{background:"#0d1020",border:"1px solid rgba(255,107,0,0.28)",borderRadius:18,width:"100%",maxWidth:520,padding:26,direction:"rtl"}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-          <span style={{color:"#fff",fontSize:20,fontWeight:900}}>📱 שלט רחוק</span>
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e => e.stopPropagation()} style={{background:"#0d1020",border:"1px solid rgba(255,107,0,0.28)",borderRadius:18,width:"100%",maxWidth:520,maxHeight:"92vh",overflowY:"auto",padding:26,direction:"rtl"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <span style={{color:"#fff",fontSize:20,fontWeight:900}}>📱 חיבור שלט רחוק</span>
           <button onClick={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:22}}>✕</button>
         </div>
 
-        <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:18}}>
+        <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:16}}>
           <span style={{width:9,height:9,borderRadius:"50%",background:statusColor}}/>
           <span style={{color:statusColor,fontSize:14,fontWeight:700}}>{statusLabel}</span>
         </div>
 
-        <div style={{background:"rgba(255,107,0,0.07)",border:"1px solid rgba(255,107,0,0.3)",borderRadius:14,padding:"20px 18px",textAlign:"center",marginBottom:18}}>
+        <div style={{background:"rgba(255,107,0,0.07)",border:"1px solid rgba(255,107,0,0.3)",borderRadius:14,padding:"18px",textAlign:"center",marginBottom:8}}>
           <div style={{color:"rgba(255,255,255,0.35)",fontSize:12,letterSpacing:3,marginBottom:8}}>קוד חיבור</div>
           <div style={{color:"#FF6B00",fontFamily:"Oswald,sans-serif",fontSize:56,letterSpacing:14,lineHeight:1}}>{roomCode || "····"}</div>
         </div>
+        <div style={{color:"rgba(255,255,255,0.28)",fontSize:12,textAlign:"center",marginBottom:16}}>
+          הקוד מוצג רק בחלון הזה — לא על המסך המוקרן
+        </div>
 
-        <ol style={{color:"rgba(255,255,255,0.6)",fontSize:14,lineHeight:2,paddingInlineStart:20,marginBottom:18}}>
-          <li>פותחים בנייד את <span style={{color:"#fff",fontFamily:"monospace",fontSize:13}}>{url}</span></li>
-          <li>מקלידים את הקוד שלמעלה</li>
-          <li>מכאן שולטים באימון מהנייד — ומה שעורכים לא מוצג על המסך עד ששולחים</li>
+        {/* the separate way in, for the phone */}
+        <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"14px 15px",marginBottom:14}}>
+          <div style={{color:"rgba(255,255,255,0.35)",fontSize:11,letterSpacing:3,marginBottom:9}}>ממשק הנייד</div>
+          <a href={remoteUrl} target="_blank" rel="noopener noreferrer"
+             style={{color:"#6ec6ff",fontFamily:"monospace",fontSize:14,wordBreak:"break-all",display:"block",marginBottom:12}}>
+            {remoteUrl || "/remote"}
+          </a>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={() => copy(pairUrl, "link")} style={linkBtn}>
+              {copied === "link" ? "✓ הועתק" : "🔗 העתק קישור עם הקוד"}
+            </button>
+            <button onClick={() => copy(roomCode, "code")} style={{...linkBtn,flex:0,minWidth:110}}>
+              {copied === "code" ? "✓ הועתק" : "📋 העתק קוד"}
+            </button>
+          </div>
+          <div style={{color:"rgba(255,255,255,0.25)",fontSize:11,marginTop:9,lineHeight:1.7}}>
+            הקישור עם הקוד נכנס ישירות לשלט בלי להקליד — שולחים אותו לנייד פעם אחת והוא נשמר שם.
+          </div>
+        </div>
+
+        <ol style={{color:"rgba(255,255,255,0.55)",fontSize:14,lineHeight:1.9,paddingInlineStart:20,marginBottom:16}}>
+          <li>פותחים בנייד את הקישור שלמעלה</li>
+          <li>מקלידים את הקוד (או משתמשים בקישור שכולל אותו)</li>
+          <li>מה שעורכים בנייד לא מוצג על המסך עד ששולחים</li>
         </ol>
 
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.03)",borderRadius:12,padding:"12px 15px",marginBottom:10}}>
@@ -539,7 +599,7 @@ function RemotePairingModal({ roomCode, remoteOn, setRemoteOn, onNewCode, status
           <Toggle value={remoteOn} onChange={setRemoteOn}/>
         </div>
 
-        <button onClick={onNewCode} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.5)",borderRadius:11,padding:"12px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:14}}>🔄 צור קוד חדש</button>
+        <button onClick={onNewCode} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.5)",borderRadius:11,padding:"12px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:14}}>🔄 צור קוד חדש — מנתק שלטים קיימים</button>
       </div>
     </div>
   );
@@ -895,11 +955,10 @@ export default function JudoTV() {
 
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           {remoteOn && roomCode && (
-            <div onClick={() => setModal("remote")} title="שלט רחוק בנייד" style={{display:"flex",alignItems:"center",gap:7,background:"rgba(255,255,255,0.04)",border:"1px solid "+(tvLink.remoteConnected?"rgba(46,204,113,0.45)":"rgba(255,255,255,0.08)"),borderRadius:9,padding:"6px 11px",cursor:"pointer"}}>
+            <button onClick={() => setModal("remote")} title="חיבור שלט רחוק בנייד" style={{display:"flex",alignItems:"center",gap:7,background:"rgba(255,255,255,0.04)",border:"1px solid "+(tvLink.remoteConnected?"rgba(46,204,113,0.45)":"rgba(255,255,255,0.08)"),borderRadius:9,padding:"8px 12px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13,fontWeight:700,color:tvLink.remoteConnected?"rgba(46,204,113,0.9)":"rgba(255,255,255,0.5)"}}>
               <span style={{width:7,height:7,borderRadius:"50%",flexShrink:0,background:tvLink.remoteConnected?"#2ecc71":tvLink.status==="online"?"rgba(255,179,71,0.8)":"rgba(255,68,68,0.7)"}}/>
-              <span style={{color:"rgba(255,255,255,0.3)",fontSize:11}}>📱 שלט</span>
-              <span style={{color:"#fff",fontFamily:"Oswald,sans-serif",fontSize:16,letterSpacing:2}}>{roomCode}</span>
-            </div>
+              📱 שלט רחוק
+            </button>
           )}
           {!projection && (
             <>

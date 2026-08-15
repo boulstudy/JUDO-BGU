@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>בדיקת Supabase Realtime — Judo BGU</title>
+<style>
+  body { background:#080a10; color:#fff; font-family:system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+         margin:0; padding:20px; line-height:1.6; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:rgba(255,255,255,0.4); font-size:13px; margin-bottom:18px; }
+  #verdict { border-radius:12px; padding:16px; font-size:17px; font-weight:700; margin-bottom:16px;
+             background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); }
+  .ok   { background:rgba(46,204,113,0.14)!important; border-color:rgba(46,204,113,0.5)!important; color:#2ecc71; }
+  .bad  { background:rgba(255,68,68,0.12)!important;  border-color:rgba(255,68,68,0.5)!important;  color:#ff6060; }
+  #log { background:rgba(0,0,0,0.45); border:1px solid rgba(255,255,255,0.09); border-radius:12px;
+         padding:14px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12.5px;
+         direction:ltr; text-align:left; white-space:pre-wrap; word-break:break-word; }
+  .p { color:#2ecc71; } .f { color:#ff6060; } .i { color:rgba(255,255,255,0.55); }
+  button { background:#FF6B00; border:0; color:#fff; border-radius:10px; padding:12px 22px;
+           font-size:15px; font-weight:700; cursor:pointer; margin-bottom:16px; }
+</style>
+</head>
+<body>
+<h1>בדיקת Supabase Realtime</h1>
+<div class="sub">בודק בדיוק את הערוץ שהשלט משתמש בו: broadcast מעל WebSocket עם ה-anon key של הפרויקט.</div>
+<button id="run">הרץ בדיקה שוב</button>
+<div id="verdict">מריץ…</div>
+<div id="log"></div>
+
+<script>
+// Same values and same wire format as app/lib/remoteBus.js
+const SUPA_URL = "https://oakbpcjxjunppuyddpsj.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ha2JwY2p4anVucHB1eWRkcHNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTcwOTIsImV4cCI6MjA5NTg3MzA5Mn0.EoYTL3N_P5C05VyR2-EFKcQUk3dcZSE3l3kWeADzQnE";
+const WS_URL = SUPA_URL.replace(/^http/, "ws") + "/realtime/v1/websocket?apikey=" + SUPA_KEY + "&vsn=1.0.0";
+const TOPIC  = "realtime:judo-remote-SELFTEST";
+
+const logEl = document.getElementById("log");
+const verdictEl = document.getElementById("verdict");
+const log = (cls, msg) => {
+  const d = document.createElement("div");
+  d.className = cls;
+  d.textContent = (cls === "p" ? "PASS  " : cls === "f" ? "FAIL  " : "      ") + msg;
+  logEl.appendChild(d);
+};
+
+function openClient(name, onJoined, onBroadcast, onFail) {
+  let ws;
+  try { ws = new WebSocket(WS_URL); }
+  catch (e) { onFail("cannot construct WebSocket: " + e.message); return null; }
+  let ref = 0, joinRef = null;
+  const nextRef = () => String(++ref);
+
+  ws.onopen = () => {
+    log("i", name + ": socket open");
+    joinRef = nextRef();
+    ws.send(JSON.stringify({
+      topic: TOPIC, event: "phx_join",
+      payload: { config: { broadcast: { self:false, ack:false }, presence:{ key:"" }, private:false } },
+      ref: joinRef, join_ref: joinRef,
+    }));
+  };
+  ws.onmessage = ev => {
+    let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
+    if (m.event === "phx_reply" && m.ref === joinRef) {
+      if (m.payload && m.payload.status === "ok") onJoined(ws, joinRef, nextRef);
+      else onFail(name + ": channel join refused → " + JSON.stringify(m.payload));
+      return;
+    }
+    if (m.event === "phx_error") { onFail(name + ": phx_error → " + JSON.stringify(m.payload)); return; }
+    if (m.event === "broadcast" && m.payload && m.payload.event === "m") onBroadcast(m.payload.payload);
+  };
+  ws.onerror = () => onFail(name + ": socket error (blocked, offline, or project unreachable)");
+  ws.onclose  = e => log("i", name + ": socket closed (code " + e.code + (e.reason ? ", " + e.reason : "") + ")");
+  return ws;
+}
+
+async function run() {
+  logEl.innerHTML = "";
+  verdictEl.className = "";
+  verdictEl.textContent = "מריץ…";
+
+  let restOk = false, joinOk = false, roundTripOk = false;
+  let settled = false;
+  const sockets = [];
+  const finish = () => {
+    if (settled) return;
+    settled = true;
+    sockets.forEach(s => { try { s && s.close(); } catch (e) {} });
+    const good = restOk && joinOk && roundTripOk;
+    verdictEl.className = good ? "ok" : "bad";
+    verdictEl.textContent = good
+      ? "✓ הכל עובד — השלט יעבוד מול הפרויקט הזה"
+      : !restOk
+        ? "✗ הפרויקט לא עונה בכלל (עדיין paused? מפתח שגוי?)"
+        : !joinOk
+          ? "✗ ה-REST עובד אבל Realtime לא מצליח להצטרף לערוץ"
+          : "✗ ההצטרפות הצליחה אבל ההודעה לא עברה בין שני הלקוחות";
+  };
+
+  // 1 — is the project awake at all?
+  try {
+    const r = await fetch(SUPA_URL + "/rest/v1/workouts?select=id&limit=1", {
+      headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY },
+    });
+    restOk = r.ok;
+    log(restOk ? "p" : "f", "REST reachable — HTTP " + r.status);
+    if (!restOk) log("i", await r.text());
+  } catch (e) {
+    log("f", "REST unreachable — " + e.message);
+  }
+
+  // 2 + 3 — two clients on one channel, one broadcasts, the other must receive.
+  const token = "tok-" + Math.random().toString(36).slice(2, 8);
+  const timer = setTimeout(() => {
+    if (!roundTripOk) log("f", "no message received within 10s");
+    finish();
+  }, 10000);
+
+  const listener = openClient("listener",
+    () => {
+      joinOk = true;
+      log("p", "listener joined " + TOPIC);
+      const sender = openClient("sender",
+        (ws, joinRef, nextRef) => {
+          log("p", "sender joined " + TOPIC);
+          ws.send(JSON.stringify({
+            topic: TOPIC, event: "broadcast",
+            payload: { type:"broadcast", event:"m", payload:{ t:"selftest", token } },
+            ref: nextRef(), join_ref: joinRef,
+          }));
+          log("i", "sender broadcast token " + token);
+        },
+        () => {},
+        msg => { log("f", msg); clearTimeout(timer); finish(); });
+      sockets.push(sender);
+    },
+    payload => {
+      if (payload && payload.token === token) {
+        roundTripOk = true;
+        log("p", "listener received the broadcast — round trip works");
+        clearTimeout(timer);
+        finish();
+      }
+    },
+    msg => { log("f", msg); clearTimeout(timer); finish(); });
+  sockets.push(listener);
+}
+
+document.getElementById("run").addEventListener("click", run);
+run();
+</script>
+</body>
+</html>
