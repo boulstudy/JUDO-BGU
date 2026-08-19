@@ -34,16 +34,21 @@
 
 ## שלב 2 — סכמה ו-RLS
 
-- [ ] ⛔ Composite FK בין `locations`↔`maps`↔`layers` (A1)
-- [ ] ⛔ Composite FK ב-`trip_stops` ו-`favorites` (A2)
-- [ ] ⛔ `platform_admins` במקום `profiles.is_platform_admin` (A3)
-- [ ] ⛔ `revoke update on profiles` + `grant update (עמודות מפורשות)`
-- [ ] ⛔ Partial unique index על כל unique שמתלווה ל-`deleted_at` (A4)
-- [ ] כל policy מסוג `for all`/`for update` — גם `using` וגם `with check` (B2)
-- [ ] כל פונקציית `security definer` — `set search_path = public, pg_temp`
-- [ ] `force row level security` על כל הטבלאות
-- [ ] אינדקס לכל עמודה שמופיעה במדיניות
-- [ ] ⛔ **חבילת בדיקות RLS ב-CI** (השלד ב-`20_RLS.sql` חלק 14)
+הסכמה כבר נכתבה ונבדקה: `db/migrations/0001..0010` + `db/seed`.
+מה שנשאר לוודא בהרצה מול Supabase אמיתי:
+
+- [ ] המיגרציות רצות בסדר, וה-**seed אחרון**. `role_permissions` ריקה
+      = אף אחד לא יכול כלום, בלי שום הודעת שגיאה מובנת
+- [ ] העמודה המחושבת `locations.geom` מתקבלת ב-PostGIS של Supabase.
+      אם `generated always as` נדחה — להחליף בטריגר, **לא** בעמודה
+      שהאפליקציה ממלאת ידנית (היא תתיישן מול lat/lng)
+- [ ] `extensions.digest` זמין ל-`locations.fingerprint`
+- [ ] `db/tests/rls_matrix.sql` עובר — 49 טענות
+- [ ] ה-CI (`.github/workflows/malanta-db.yml`) ירוק על PR
+- [ ] הרצת ה-**down** נבדקה בפועל על בסיס נתונים חד-פעמי, לא רק נכתבה
+- [ ] ⛔ טבלה חדשה שמתווספת בעתיד — **גם policy וגם `grant`**.
+      בלי `grant` היא נעולה; בלי policy היא נעולה. עם `grant` בלי policy
+      היא נעולה. הסכנה היחידה: `grant` רחב שנוסף בטעות
 
 ## שלב 3 — ייבוא
 

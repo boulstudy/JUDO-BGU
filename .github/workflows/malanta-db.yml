@@ -1,0 +1,43 @@
+name: malanta-db
+on:
+  pull_request:
+    paths: ['docs/malanta/db/**']
+  push:
+    branches: [main]
+    paths: ['docs/malanta/db/**']
+
+jobs:
+  rls:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: malanta_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      PGPASSWORD: postgres
+      DB: postgresql://postgres:postgres@localhost:5432/malanta_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stub Supabase auth schema
+        run: |
+          psql "$DB" -v ON_ERROR_STOP=1 -c "
+            create schema auth;
+            create table auth.users (id uuid primary key, email text,
+              raw_user_meta_data jsonb, email_confirmed_at timestamptz);
+            create function auth.uid() returns uuid language sql stable as \$\$
+              select nullif(current_setting('request.jwt.claim.sub', true),'')::uuid \$\$;
+            create role anon; create role authenticated; create role service_role;
+            grant usage on schema public to anon, authenticated, service_role;"
+      - name: Apply migrations and seed
+        run: |
+          for f in docs/malanta/db/migrations/0*.sql docs/malanta/db/seed/0*.sql; do
+            echo "── $f"; psql "$DB" -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+      - name: RLS isolation suite
+        run: psql "$DB" -v ON_ERROR_STOP=1 -f docs/malanta/db/tests/rls_matrix.sql
