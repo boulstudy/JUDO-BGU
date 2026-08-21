@@ -2,6 +2,7 @@
 
 ## סדר הרצה
 ```
+migrations/0000_platform_compat.sql   ⚠️ רק על Postgres שאינו Supabase
 migrations/0001_foundation.sql        תשתית: סכמות, פונקציות, audit_log
 migrations/0002_authz_catalog.sql     קטלוג תפקידים והרשאות (מבנה)
 migrations/0003_identity_tenancy.sql  יוצרים, משתמשים, חברות, הזמנות
@@ -29,6 +30,12 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/rls_matrix.sql
 ```
 49 טענות. יוצרת נתוני בדיקה משלה — **להריץ על בסיס נתונים נקי בלבד.**
 כישלון מחזיר exit code שונה מאפס, כלומר שובר את ה-CI.
+
+## ניידות
+`0000_platform_compat.sql` הוא **כל** ההסתמכות על סופאבייס: `auth.uid()`,
+`auth.users`, שלושת התפקידים, וסכמת `extensions`. על סופאבייס מדלגים עליו.
+נבדק: הסט המלא + 49 הבדיקות רצים על PostgreSQL סטנדרטי עם הקובץ הזה בלבד.
+פירוט וחלופות: `../70_HOSTING.md`.
 
 ## שלושה דברים שחייבים להישאר נכונים
 1. **`seed/` רץ אחרי `0010`.** `role_permissions` ריקה = אף אחד לא יכול כלום.

@@ -54,8 +54,11 @@ FK עצמאיים על `tenant_id` ועל `map_id` **אינם** אוכפים ש�
 
 # מחסנית טכנולוגית — נקבע, אל תציע חלופות
 - Next.js (App Router), TypeScript — 🔧 *לנעול גרסה מפורשת בהתקנה; `@latest` כבר לא נותן 14*
-- Supabase: Postgres + PostGIS + Auth + RLS
-- Vercel (Pro)
+- **Postgres + PostGIS + RLS** — Supabase או Neon. 🔧 *הסכמה ניידת בין השניים:*
+  *כל ההסתמשות על סופאבייס מרוכזת ב-`0000_platform_compat.sql`, ונבדקה בפועל.*
+  *בלי PostgREST — שכבת הדאטה עושה `set local request.jwt.claim.sub` בעצמה.*
+- אירוח: 🔧 *Cloudflare Workers (OpenNext) או Vercel Pro.*
+  **⚠️ Vercel Hobby אסור — שימוש מסחרי.** ראה `70_HOSTING.md`
 - **MapLibre GL JS** — לא Google Maps. תומך אופליין, לא נועל לספק
 - כתובת האריחים מאחורי `NEXT_PUBLIC_MAP_TILES_URL` — החלפת ספק היא שורה אחת
 - **תמונות ב-Cloudflare R2, לא ב-Supabase Storage.** אין יוצא מן הכלל
