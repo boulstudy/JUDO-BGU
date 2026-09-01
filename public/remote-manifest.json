@@ -1,0 +1,17 @@
+{
+  "name": "שלט אימון — Judo BGU",
+  "short_name": "שלט ג׳ודו",
+  "start_url": "/remote",
+  "scope": "/remote",
+  "display": "standalone",
+  "background_color": "#080a10",
+  "theme_color": "#FF6B00",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

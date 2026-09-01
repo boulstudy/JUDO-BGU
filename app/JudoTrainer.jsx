@@ -2,48 +2,15 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 
-const SUPA_URL = "https://oakbpcjxjunppuyddpsj.supabase.co";
-const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ha2JwY2p4anVucHB1eWRkcHNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTcwOTIsImV4cCI6MjA5NTg3MzA5Mn0.EoYTL3N_P5C05VyR2-EFKcQUk3dcZSE3l3kWeADzQnE";
-
-const supa = async (path, opts = {}) => {
-  try {
-    const r = await fetch(SUPA_URL + "/rest/v1/" + path, {
-      ...opts,
-      headers: {
-        "apikey": SUPA_KEY,
-        "Authorization": "Bearer " + SUPA_KEY,
-        "Content-Type": "application/json",
-        "Prefer": opts.prefer !== undefined ? opts.prefer : "return=representation",
-        ...(opts.headers || {}),
-      },
-    });
-    if (!r.ok) return null;
-    const text = await r.text();
-    return text ? JSON.parse(text) : null;
-  } catch(e) {
-    return null;
-  }
-};
-
-const DRILL_SECTIONS = [
-  { id:"warmup",    label:"חימום",   color:"#6ec6ff" },
-  { id:"technique", label:"טכניקה",  color:"#FF6B00" },
-  { id:"randori",   label:"קרבות",   color:"#ff4444" },
-  { id:"strength",  label:"כוח",     color:"#a8ff78" },
-  { id:"mixed",     label:"משולב",   color:"#ffb347" },
-  { id:"rest",      label:"מנוחה",   color:"#88ccff" },
-];
-const SEC_COLOR = Object.fromEntries(DRILL_SECTIONS.map(s => [s.id, s.color]));
-
-const PATTERNS = [
-  { id:"alternate", label:"לסירוגין", desc:"לבן עובד, אחר כך כחול" },
-  { id:"together",  label:"יחד",      desc:"שניהם עובדים" },
-];
-const REST_TIMING = [
-  { id:"none",        label:"ללא מנוחה פנימית" },
-  { id:"after_each",  label:"אחרי כל עובד" },
-  { id:"after_round", label:"אחרי כל סבב" },
-];
+import {
+  supa,
+  DRILL_SECTIONS, SEC_COLOR,
+  fmt, getDrillPhases, totalDrillTime, drillClockSignature,
+} from "./lib/shared";
+import { DrillForm, Toggle } from "./lib/ui";
+import { useTvLink } from "./lib/link";
+import { makeRoomCode, normalizeRoomCode } from "./lib/remoteBus";
+import { COMMANDS, pickPatch } from "./lib/remoteProtocol";
 
 const INIT_JUDOKAS = [
   { id:1, name:"יואב כ׳",  color:"white", personalDrills:[{id:101,name:"נאגה גדן שמאל",duration:180},{id:102,name:"אוצ׳י גארי",duration:120}]},
@@ -61,39 +28,6 @@ const INIT_DRILLS = [
   { id:4, name:"ראנדורי עמידה", section:"randori",   durationWork:300, durationRest:60, rounds:3, pattern:"together",  restTiming:"after_round", activeColor:"both",  type:"partner",  note:"50% עוצמה",                autoNext:false },
   { id:5, name:"עבודה אישית",   section:"mixed",     durationWork:300, durationRest:0,  rounds:1, pattern:"together",  restTiming:"none",        activeColor:"both",  type:"personal", note:"כל אחד על התרגיל שלו",    autoNext:false },
 ];
-
-const fmt = s => {
-  const neg = s < 0, abs = Math.abs(s);
-  return (neg?"-":"") + String(Math.floor(abs/60)).padStart(2,"0") + ":" + String(abs%60).padStart(2,"0");
-};
-
-function getDrillPhases(drill) {
-  if (!drill) return [];
-  if (drill.type === "rest" || drill.type === "group" || drill.type === "personal") {
-    return [{ phase:"work", who:"both", duration: drill.durationWork || 60, label: drill.type === "rest" ? "מנוחה" : "עבודה" }];
-  }
-  const { durationWork=60, durationRest=0, rounds=1, pattern="together", restTiming="none", activeColor="both" } = drill;
-  const phases = [];
-  for (let r = 0; r < rounds; r++) {
-    if (pattern === "together") {
-      phases.push({ phase:"work", who:"both", duration:durationWork, label:"שניהם עובדים", round:r+1 });
-      if (restTiming !== "none" && durationRest > 0) phases.push({ phase:"rest", who:"none", duration:durationRest, label:"מנוחה" });
-    } else {
-      const first  = activeColor === "blue" ? "blue" : "white";
-      const second = first === "white" ? "blue" : "white";
-      phases.push({ phase:"work", who:first,  duration:durationWork, label:first==="white"?"לבן עובד":"כחול עובד", round:r+1 });
-      if (restTiming === "after_each" && durationRest > 0) phases.push({ phase:"rest", who:"none", duration:durationRest, label:"מנוחה" });
-      phases.push({ phase:"work", who:second, duration:durationWork, label:second==="white"?"לבן עובד":"כחול עובד", round:r+1 });
-      if ((restTiming === "after_each" || restTiming === "after_round") && durationRest > 0) phases.push({ phase:"rest", who:"none", duration:durationRest, label:"מנוחה" });
-    }
-  }
-  return phases;
-}
-
-function totalDrillTime(drill) {
-  return getDrillPhases(drill).reduce((a,p) => a+p.duration, 0);
-}
-
 
 // ── Sound — Flex Timer / GymNext style (client-only) ─────────────────────────
 // soundType: "beep" | "buzz" | "mute"
@@ -207,177 +141,6 @@ function useSound(soundType) {
   }, [soundType, playBeep, playBuzz]);
 
   return { tickBeep, endBeep, startBeep, initCtx };
-}
-
-// ── Time Picker ───────────────────────────────────────────────────────────────
-function TimeWheel({ value, onChange, max, label }) {
-  const items = Array.from({length: max+1}, (_,i) => i);
-  const ref = useRef(null);
-  const isScrolling = useRef(false);
-
-  useEffect(() => {
-    if (ref.current && !isScrolling.current) {
-      ref.current.scrollTop = value * 44;
-    }
-  }, [value]);
-
-  const handleScroll = () => {
-    isScrolling.current = true;
-    if (ref.current) {
-      const v = Math.round(ref.current.scrollTop / 44);
-      onChange(Math.min(max, Math.max(0, v)));
-    }
-    setTimeout(() => { isScrolling.current = false; }, 200);
-  };
-
-  return (
-    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-      <span style={{color:"rgba(255,255,255,0.35)",fontSize:11,letterSpacing:2}}>{label}</span>
-      <div style={{position:"relative",width:64,height:132,overflow:"hidden",borderRadius:10,background:"rgba(0,0,0,0.3)",border:"1px solid rgba(255,107,0,0.3)"}}>
-        <div style={{position:"absolute",top:0,left:0,right:0,height:44,background:"linear-gradient(to bottom,rgba(13,16,32,0.95),transparent)",pointerEvents:"none",zIndex:2}}/>
-        <div style={{position:"absolute",bottom:0,left:0,right:0,height:44,background:"linear-gradient(to top,rgba(13,16,32,0.95),transparent)",pointerEvents:"none",zIndex:2}}/>
-        <div style={{position:"absolute",top:"50%",left:0,right:0,height:44,transform:"translateY(-50%)",background:"rgba(255,107,0,0.12)",borderTop:"1px solid rgba(255,107,0,0.4)",borderBottom:"1px solid rgba(255,107,0,0.4)",pointerEvents:"none",zIndex:1}}/>
-        <div ref={ref} onScroll={handleScroll} style={{height:"100%",overflowY:"scroll",scrollSnapType:"y mandatory",scrollbarWidth:"none",msOverflowStyle:"none",paddingTop:44,paddingBottom:44,WebkitOverflowScrolling:"touch",touchAction:"pan-y"}}>
-          {items.map(i => (
-            <div key={i} onClick={() => onChange(i)} style={{height:44,display:"flex",alignItems:"center",justifyContent:"center",scrollSnapAlign:"center",color:i===value?"#fff":"rgba(255,255,255,0.3)",fontSize:i===value?22:17,fontFamily:"Oswald,sans-serif",fontWeight:700,transition:"all 0.15s",cursor:"pointer"}}>
-              {String(i).padStart(2,"0")}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TimePicker({ seconds, onChange }) {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return (
-    <div style={{display:"flex",alignItems:"center",gap:8}}>
-      <TimeWheel value={mins} onChange={m => onChange(m*60+secs)} max={59} label="דק׳"/>
-      <span style={{color:"rgba(255,107,0,0.6)",fontSize:28,fontFamily:"Oswald,sans-serif",marginTop:16}}>:</span>
-      <TimeWheel value={secs} onChange={s => onChange(mins*60+s)} max={59} label="שנ׳"/>
-    </div>
-  );
-}
-
-// ── Toggle ────────────────────────────────────────────────────────────────────
-function Toggle({ value, onChange }) {
-  return (
-    <div onClick={() => onChange(!value)} style={{width:44,height:24,borderRadius:12,background:value?"#FF6B00":"rgba(255,255,255,0.1)",cursor:"pointer",position:"relative",transition:"background 0.3s",border:"1px solid rgba(255,255,255,0.15)",flexShrink:0}}>
-      <div style={{position:"absolute",top:2,left:value?22:2,width:18,height:18,borderRadius:"50%",background:"#fff",transition:"left 0.3s"}}/>
-    </div>
-  );
-}
-
-// ── Drill Form ────────────────────────────────────────────────────────────────
-function DrillForm({ drill, onChange, onCancel, onSave, onSaveToLibrary }) {
-  const d = drill;
-  const isRest = d.type === "rest";
-  const inp = {background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,107,0,0.3)",borderRadius:8,color:"#fff",padding:"7px 11px",fontFamily:"Heebo,sans-serif",fontSize:14,outline:"none",width:"100%"};
-  const lbl = {color:"rgba(255,255,255,0.4)",fontSize:11,marginBottom:4,display:"block",letterSpacing:1};
-  return (
-    <div style={{background:"rgba(255,107,0,0.05)",border:"1px solid rgba(255,107,0,0.25)",borderRadius:12,padding:16,marginBottom:8}}>
-      <div style={{display:"flex",gap:10,marginBottom:12,flexWrap:"wrap"}}>
-        <div style={{flex:2,minWidth:130}}>
-          <span style={lbl}>שם התרגיל</span>
-          <input value={d.name} onChange={e => onChange({...d,name:e.target.value})} style={inp} placeholder="שם"/>
-        </div>
-        <div style={{flex:1,minWidth:90}}>
-          <span style={lbl}>סוג</span>
-          <select value={d.type} onChange={e => {
-            const t = e.target.value;
-            const defaults = t==="rest"
-              ? {type:t,section:"rest",pattern:"together",restTiming:"none",activeColor:"both",rounds:1}
-              : t==="personal"
-              ? {type:t,section:"mixed",pattern:"together",restTiming:"none",activeColor:"both"}
-              : t==="group"
-              ? {type:t,section:"warmup",pattern:"together",restTiming:"none",activeColor:"both"}
-              : {type:t,section:"technique",pattern:"alternate",restTiming:"after_each",activeColor:"white"};
-            onChange({...d,...defaults});
-          }} style={inp}>
-            <option value="group">קבוצה</option>
-            <option value="partner">זוגות</option>
-            <option value="personal">אישי</option>
-            <option value="rest">מנוחה</option>
-          </select>
-        </div>
-        <div style={{flex:1,minWidth:90}}>
-          <span style={lbl}>חלק באימון</span>
-          <select value={d.section||"warmup"} onChange={e => onChange({...d,section:e.target.value})} style={inp}>
-            {DRILL_SECTIONS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
-        </div>
-      </div>
-
-      <div style={{display:"flex",gap:16,marginBottom:12,flexWrap:"wrap",alignItems:"flex-end"}}>
-        <div>
-          <span style={lbl}>זמן {isRest?"מנוחה":"עבודה"}</span>
-          <TimePicker seconds={d.durationWork||60} onChange={v => onChange({...d,durationWork:v})}/>
-        </div>
-        {!isRest && (
-          <div style={{flex:1,minWidth:80}}>
-            <span style={lbl}>סבבים</span>
-            <input type="number" min="1" max="20" value={d.rounds||1} onChange={e => onChange({...d,rounds:parseInt(e.target.value)||1})} style={{...inp,width:70}}/>
-          </div>
-        )}
-      </div>
-
-      {!isRest && (
-        <div style={{display:"flex",gap:10,marginBottom:12,flexWrap:"wrap"}}>
-          <div style={{flex:1,minWidth:120}}>
-            <span style={lbl}>תבנית</span>
-            <select value={d.pattern||"together"} onChange={e => onChange({...d,pattern:e.target.value})} style={inp}>
-              {PATTERNS.map(p => <option key={p.id} value={p.id}>{p.label} — {p.desc}</option>)}
-            </select>
-          </div>
-          {d.pattern === "alternate" && (
-            <div style={{flex:1,minWidth:100}}>
-              <span style={lbl}>מי מתחיל</span>
-              <select value={d.activeColor||"white"} onChange={e => onChange({...d,activeColor:e.target.value})} style={inp}>
-                <option value="white">לבן</option>
-                <option value="blue">כחול</option>
-              </select>
-            </div>
-          )}
-          <div style={{flex:1,minWidth:130}}>
-            <span style={lbl}>מנוחה פנימית</span>
-            <select value={d.restTiming||"none"} onChange={e => onChange({...d,restTiming:e.target.value})} style={inp}>
-              {REST_TIMING.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-            </select>
-          </div>
-          {d.restTiming !== "none" && (
-            <div>
-              <span style={lbl}>זמן מנוחה</span>
-              <TimePicker seconds={d.durationRest||0} onChange={v => onChange({...d,durationRest:v})}/>
-            </div>
-          )}
-        </div>
-      )}
-
-      {!isRest && (
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-          <span style={lbl}>מעבר אוטומטי לתרגיל הבא</span>
-          <Toggle value={!!d.autoNext} onChange={v => onChange({...d,autoNext:v})}/>
-          <span style={{color:"rgba(255,255,255,0.3)",fontSize:12}}>{d.autoNext?"פעיל":"כבוי"}</span>
-        </div>
-      )}
-
-      <div style={{marginBottom:12}}>
-        <span style={lbl}>הערות</span>
-        <input value={d.note||""} onChange={e => onChange({...d,note:e.target.value})} style={inp} placeholder="הערות אופציונאליות"/>
-      </div>
-
-      <div style={{display:"flex",gap:8,alignItems:"center",justifyContent:"space-between"}}>
-        <div style={{color:"rgba(255,255,255,0.25)",fontSize:12}}>סה״כ: {fmt(totalDrillTime(d))}</div>
-        <div style={{display:"flex",gap:8}}>
-          {onSaveToLibrary && <button onClick={onSaveToLibrary} style={{background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.45)",borderRadius:8,padding:"7px 12px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:12}}>📚 ספרייה</button>}
-          <button onClick={onCancel} style={{background:"none",border:"1px solid rgba(255,255,255,0.12)",color:"#fff",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13}}>ביטול</button>
-          <button onClick={onSave} style={{background:"#FF6B00",border:"none",color:"#fff",borderRadius:8,padding:"7px 18px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:14}}>שמור</button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ── Editor Modal ──────────────────────────────────────────────────────────────
@@ -735,6 +498,113 @@ function AttendanceModal({ judokas, onClose }) {
   );
 }
 
+// ── Remote pairing ────────────────────────────────────────────────────────────
+// The code lives here and nowhere else. It is deliberately not on the always-on
+// display, so nobody can memorise it off the projection and join mid-training.
+function RemotePairingModal({ roomCode, remoteOn, setRemoteOn, onNewCode, status, connected, onClose }) {
+  const [origin, setOrigin] = useState("");
+  const [copied, setCopied] = useState("");
+
+  useEffect(() => { try { setOrigin(window.location.origin); } catch(e) {} }, []);
+
+  // Once a remote is on the line the code has done its job — get it off screen.
+  // onClose is a fresh closure on every render of the TV, so it is held in a ref;
+  // depending on it directly would restart the timeout before it ever fires.
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (!connected) return;
+    const id = setTimeout(() => closeRef.current(), 2500);
+    return () => clearTimeout(id);
+  }, [connected]);
+
+  const remoteUrl = (origin || "") + "/remote";
+  const pairUrl   = remoteUrl + (roomCode ? "?code=" + roomCode : "");
+
+  const copy = (text, what) => {
+    const done = () => { setCopied(what); setTimeout(() => setCopied(""), 1800); };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, () => {});
+        return;
+      }
+    } catch(e) {}
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      done();
+    } catch(e) {}
+  };
+
+  const statusLabel = connected ? "השלט התחבר — סוגר"
+    : status === "online" ? "ממתין לשלט…"
+    : status === "connecting" ? "מתחבר…"
+    : "אין חיבור לשרת";
+  const statusColor = connected ? "#2ecc71" : status === "online" ? "#ffb347" : "#ff4444";
+
+  const linkBtn = {background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",color:"rgba(255,255,255,0.65)",borderRadius:10,padding:"11px 12px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13,fontWeight:700,flex:1};
+
+  return (
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div onClick={e => e.stopPropagation()} style={{background:"#0d1020",border:"1px solid rgba(255,107,0,0.28)",borderRadius:18,width:"100%",maxWidth:520,maxHeight:"92vh",overflowY:"auto",padding:26,direction:"rtl"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <span style={{color:"#fff",fontSize:20,fontWeight:900}}>📱 חיבור שלט רחוק</span>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:22}}>✕</button>
+        </div>
+
+        <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:16}}>
+          <span style={{width:9,height:9,borderRadius:"50%",background:statusColor}}/>
+          <span style={{color:statusColor,fontSize:14,fontWeight:700}}>{statusLabel}</span>
+        </div>
+
+        <div style={{background:"rgba(255,107,0,0.07)",border:"1px solid rgba(255,107,0,0.3)",borderRadius:14,padding:"18px",textAlign:"center",marginBottom:8}}>
+          <div style={{color:"rgba(255,255,255,0.35)",fontSize:12,letterSpacing:3,marginBottom:8}}>קוד חיבור</div>
+          <div style={{color:"#FF6B00",fontFamily:"Oswald,sans-serif",fontSize:56,letterSpacing:14,lineHeight:1}}>{roomCode || "····"}</div>
+        </div>
+        <div style={{color:"rgba(255,255,255,0.28)",fontSize:12,textAlign:"center",marginBottom:16}}>
+          הקוד מוצג רק בחלון הזה — לא על המסך המוקרן
+        </div>
+
+        {/* the separate way in, for the phone */}
+        <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"14px 15px",marginBottom:14}}>
+          <div style={{color:"rgba(255,255,255,0.35)",fontSize:11,letterSpacing:3,marginBottom:9}}>ממשק הנייד</div>
+          <a href={remoteUrl} target="_blank" rel="noopener noreferrer"
+             style={{color:"#6ec6ff",fontFamily:"monospace",fontSize:14,wordBreak:"break-all",display:"block",marginBottom:12}}>
+            {remoteUrl || "/remote"}
+          </a>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={() => copy(pairUrl, "link")} style={linkBtn}>
+              {copied === "link" ? "✓ הועתק" : "🔗 העתק קישור עם הקוד"}
+            </button>
+            <button onClick={() => copy(roomCode, "code")} style={{...linkBtn,flex:0,minWidth:110}}>
+              {copied === "code" ? "✓ הועתק" : "📋 העתק קוד"}
+            </button>
+          </div>
+          <div style={{color:"rgba(255,255,255,0.25)",fontSize:11,marginTop:9,lineHeight:1.7}}>
+            הקישור עם הקוד נכנס ישירות לשלט בלי להקליד — שולחים אותו לנייד פעם אחת והוא נשמר שם.
+          </div>
+        </div>
+
+        <ol style={{color:"rgba(255,255,255,0.55)",fontSize:14,lineHeight:1.9,paddingInlineStart:20,marginBottom:16}}>
+          <li>פותחים בנייד את הקישור שלמעלה</li>
+          <li>מקלידים את הקוד (או משתמשים בקישור שכולל אותו)</li>
+          <li>מה שעורכים בנייד לא מוצג על המסך עד ששולחים</li>
+        </ol>
+
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.03)",borderRadius:12,padding:"12px 15px",marginBottom:10}}>
+          <span style={{color:"rgba(255,255,255,0.55)",fontSize:14}}>שלט רחוק פעיל</span>
+          <Toggle value={remoteOn} onChange={setRemoteOn}/>
+        </div>
+
+        <button onClick={onNewCode} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.5)",borderRadius:11,padding:"12px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:14}}>🔄 צור קוד חדש — מנתק שלטים קיימים</button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function JudoTV() {
   const [drills,  setDrills]  = useState(INIT_DRILLS);
@@ -756,6 +626,12 @@ export default function JudoTV() {
   const [toolbarOpen, setToolbarOpen] = useState(false);
   const [notes, setNotes] = useState("");
   const [notesOpen, setNotesOpen] = useState(true);
+
+  // ── Remote control ──────────────────────────────────────────────────────────
+  const [roomCode,    setRoomCode]    = useState("");
+  const [remoteOn,    setRemoteOn]    = useState(true);
+  const [projection,  setProjection]  = useState(false); // clean screen: hide the controls
+  const [audioReady,  setAudioReady]  = useState(false);
 
   const intervalRef = useRef(null);
   const alertRef    = useRef(null);
@@ -781,13 +657,35 @@ export default function JudoTV() {
     });
   }, []);
 
+  // Reset the clock when the drill — or its phase layout — actually changed.
+  // Renaming a drill or editing a later one from the remote must not knock the
+  // running clock back to the start.
+  const clockSigRef      = useRef(null);
+  const clockOverrideRef = useRef(null);
+  const [clockApplyTick, setClockApplyTick] = useState(0);
+
   useEffect(() => {
-    if (!current) return;
-    const ph = getDrillPhases(current);
+    const d = drills[drillIdx];
+    if (!d) return;
+    const sig = drillClockSignature(d);
+    if (clockSigRef.current === sig) return;
+    clockSigRef.current = sig;
+    const ph = getDrillPhases(d);
     setPhaseIdx(0);
     setTimeLeft(ph[0] ? ph[0].duration : 60);
     setAlertActive(false);
   }, [drillIdx, drills]);
+
+  // Declared after the reset effect on purpose: a clock position pushed from the
+  // remote has to win over that reset when both land in the same commit.
+  useEffect(() => {
+    const o = clockOverrideRef.current;
+    if (!o) return;
+    clockOverrideRef.current = null;
+    if (o.phaseIdx !== undefined) setPhaseIdx(o.phaseIdx);
+    if (o.timeLeft !== undefined) setTimeLeft(o.timeLeft);
+    setAlertActive(false);
+  }, [clockApplyTick]);
 
   useEffect(() => {
     if (isPersonal) {
@@ -831,37 +729,42 @@ export default function JudoTV() {
     });
   }, [phases, triggerAlert, globalAutoNext, current, drills]);
 
+  // The ticker reads everything it needs through a ref. Depending on those
+  // values directly would tear down and restart the interval on every render —
+  // and since the remote link re-renders the page between ticks, that used to
+  // push the next tick a further second away and run the clock slow.
+  const tickCtxRef = useRef(null);
+  tickCtxRef.current = { advancePhase, tickBeep, isPersonal, judokas };
+
   useEffect(() => {
-    if (running) {
-      intervalRef.current = setInterval(() => {
-        setTimeLeft(t => {
-          if (t <= 3 && t > 0) tickBeep(t);
-          if (t <= 1) { advancePhase(); return 0; }
-          return t - 1;
-        });
-        setTotalElapsed(e => e + 1);
-        if (isPersonal) {
-          setPersonalTimers(prev => {
-            const next = {...prev};
-            judokas.forEach(j => {
-              const pt = next[j.id]; if(!pt) return;
-              if (pt.timeLeft <= 1) {
-                const ni = pt.drillIdx + 1;
-                const nd = j.personalDrills && j.personalDrills[ni];
-                next[j.id] = nd ? {drillIdx:ni,timeLeft:nd.duration} : {drillIdx:pt.drillIdx,timeLeft:0};
-              } else {
-                next[j.id] = {...pt,timeLeft:pt.timeLeft-1};
-              }
-            });
-            return next;
+    if (!running) { clearInterval(intervalRef.current); return; }
+    intervalRef.current = setInterval(() => {
+      const { advancePhase, tickBeep, isPersonal, judokas } = tickCtxRef.current;
+      setTimeLeft(t => {
+        if (t <= 3 && t > 0) tickBeep(t);
+        if (t <= 1) { advancePhase(); return 0; }
+        return t - 1;
+      });
+      setTotalElapsed(e => e + 1);
+      if (isPersonal) {
+        setPersonalTimers(prev => {
+          const next = {...prev};
+          judokas.forEach(j => {
+            const pt = next[j.id]; if(!pt) return;
+            if (pt.timeLeft <= 1) {
+              const ni = pt.drillIdx + 1;
+              const nd = j.personalDrills && j.personalDrills[ni];
+              next[j.id] = nd ? {drillIdx:ni,timeLeft:nd.duration} : {drillIdx:pt.drillIdx,timeLeft:0};
+            } else {
+              next[j.id] = {...pt,timeLeft:pt.timeLeft-1};
+            }
           });
-        }
-      }, 1000);
-    } else {
-      clearInterval(intervalRef.current);
-    }
+          return next;
+        });
+      }
+    }, 1000);
     return () => clearInterval(intervalRef.current);
-  }, [running, isPersonal, judokas, advancePhase, tickBeep]);
+  }, [running]);
 
   const goToDrill = useCallback(i => {
     if (i >= 0 && i < drills.length) { setDrillIdx(i); setRunning(false); }
@@ -874,6 +777,120 @@ export default function JudoTV() {
     if (nextPi < phases.length) { setPhaseIdx(nextPi); setTimeLeft(phases[nextPi].duration); }
     else goToDrill(drillIdx + 1);
   };
+
+  const startPlaying = useCallback(() => {
+    setRunning(r => { if (!r) startBeep(); return true; });
+  }, [startBeep]);
+
+  // The browser only lets us open an AudioContext from inside a real tap, so a
+  // play command arriving from the phone cannot unlock it. Track whether the TV
+  // has been tapped once, and nag until it has.
+  const unlockAudio = useCallback(() => {
+    const ctx = initCtx();
+    if (!ctx) return;
+    if (ctx.state === "running") setAudioReady(true);
+    else setTimeout(() => setAudioReady(ctx.state === "running"), 250);
+  }, [initCtx]);
+
+  // ── Remote control link ─────────────────────────────────────────────────────
+  useEffect(() => {
+    let code = "";
+    try {
+      code = normalizeRoomCode(window.localStorage.getItem("judo_room") || "");
+      if (code.length < 4) { code = makeRoomCode(4); window.localStorage.setItem("judo_room", code); }
+      if (window.localStorage.getItem("judo_remote_on") === "0") setRemoteOn(false);
+    } catch(e) { code = makeRoomCode(4); }
+    setRoomCode(code);
+  }, []);
+
+  useEffect(() => {
+    try { window.localStorage.setItem("judo_remote_on", remoteOn ? "1" : "0"); } catch(e) {}
+  }, [remoteOn]);
+
+  const newRoomCode = () => {
+    const code = makeRoomCode(4);
+    try { window.localStorage.setItem("judo_room", code); } catch(e) {}
+    setRoomCode(code);
+  };
+
+  const heavy = { drills, judokas, pairs, notes, globalAutoNext, soundType, projection };
+  const heavyRef = useRef(heavy);
+  heavyRef.current = heavy;
+
+  const [rev, setRev] = useState(1);
+  useEffect(() => { setRev(r => r + 1); },
+    [drills, judokas, pairs, notes, globalAutoNext, soundType, projection]);
+
+  const handleRemoteCommand = m => {
+    switch (m.c) {
+      case COMMANDS.PLAY:  startPlaying(); break;
+      case COMMANDS.PAUSE: setRunning(false); break;
+      case COMMANDS.RESET: setTimeLeft(phase.duration); setAlertActive(false); break;
+      case COMMANDS.NEXT_PHASE: nextPhaseManual(); break;
+      case COMMANDS.PREV_DRILL: goToDrill(drillIdx - 1); break;
+      case COMMANDS.NEXT_DRILL: goToDrill(drillIdx + 1); break;
+      case COMMANDS.ADD_TIME: setTimeLeft(t => Math.max(0, t + (Number(m.seconds) || 0))); break;
+      case COMMANDS.GOTO: {
+        const di = Math.max(0, Math.min(Number(m.drillIdx) || 0, drills.length - 1));
+        const ph = getDrillPhases(drills[di]);
+        const pi = Math.max(0, Math.min(Number(m.phaseIdx) || 0, Math.max(0, ph.length - 1)));
+        clockOverrideRef.current = { phaseIdx: pi, timeLeft: ph[pi] ? ph[pi].duration : 60 };
+        setDrillIdx(di);
+        setRunning(false);
+        setClockApplyTick(t => t + 1);
+        break;
+      }
+      default: break;
+    }
+  };
+
+  // Everything the coach staged on the phone lands here in one go.
+  const handleRemotePatch = useCallback((patch, then) => {
+    const p = pickPatch(patch);
+    const nextDrills = Array.isArray(p.drills) && p.drills.length ? p.drills : drills;
+
+    if (nextDrills !== drills)        setDrills(nextDrills);
+    if (Array.isArray(p.judokas))     setJudokas(p.judokas);
+    if (Array.isArray(p.pairs))       setPairs(p.pairs);
+    if (typeof p.notes === "string")  setNotes(p.notes);
+    if (p.globalAutoNext !== undefined) setGlobalAutoNext(!!p.globalAutoNext);
+    if (p.soundType)                  setSoundType(p.soundType);
+    if (p.projection !== undefined)   setProjection(!!p.projection);
+
+    const di = Math.max(0, Math.min(
+      p.drillIdx !== undefined ? Number(p.drillIdx) || 0 : drillIdx,
+      nextDrills.length - 1
+    ));
+    setDrillIdx(di);
+
+    const ph = getDrillPhases(nextDrills[di]);
+    const override = {};
+    if (p.phaseIdx !== undefined) {
+      override.phaseIdx = Math.max(0, Math.min(Number(p.phaseIdx) || 0, Math.max(0, ph.length - 1)));
+    }
+    if (p.timeLeft !== undefined) {
+      override.timeLeft = Math.max(0, Number(p.timeLeft) || 0);
+    } else if (override.phaseIdx !== undefined) {
+      override.timeLeft = ph[override.phaseIdx] ? ph[override.phaseIdx].duration : 60;
+    }
+    if (override.phaseIdx !== undefined || override.timeLeft !== undefined) {
+      clockOverrideRef.current = override;
+      setClockApplyTick(t => t + 1);
+    }
+
+    if (then === "play")       startPlaying();
+    else if (then === "pause") setRunning(false);
+  }, [drills, drillIdx, startPlaying]);
+
+  const tvLink = useTvLink({
+    room: roomCode,
+    active: remoteOn && !!roomCode,
+    light: { drillIdx, phaseIdx, timeLeft, running, totalElapsed },
+    heavyRef,
+    rev,
+    onCommand: handleRemoteCommand,
+    onPatch: handleRemotePatch,
+  });
 
   const pct = timeLeft / (phase.duration || 1);
   const urgent  = pct < 0.2 || alertActive;
@@ -909,6 +926,13 @@ export default function JudoTV() {
 
       {alertActive && <div style={{position:"fixed",inset:0,border:"5px solid rgba(255,60,60,0.7)",pointerEvents:"none",zIndex:50,animation:"alertBorder 0.35s infinite"}}/>}
 
+      {/* Audio can only be unlocked by a tap on the TV itself */}
+      {!audioReady && remoteOn && (
+        <div onClick={unlockAudio} style={{position:"fixed",bottom:14,left:"50%",transform:"translateX(-50%)",zIndex:120,background:"rgba(255,107,0,0.16)",border:"1px solid rgba(255,107,0,0.5)",color:"#FF6B00",borderRadius:11,padding:"10px 16px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:14,fontWeight:700,direction:"rtl"}}>
+          🔊 לחצו כאן להפעלת הצלילים במסך
+        </div>
+      )}
+
       {/* TOP BAR */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 28px",borderBottom:"1px solid rgba(255,255,255,0.055)",background:"rgba(0,0,0,0.32)",flexShrink:0,position:"relative",zIndex:10}}>
         <div style={{display:"flex",alignItems:"center",gap:13}}>
@@ -930,13 +954,23 @@ export default function JudoTV() {
         </div>
 
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <div style={{display:"flex",alignItems:"center",gap:4,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"4px 6px"}}>
-            <button onClick={() => setScale(s => Math.max(0.5, Math.round((s-0.1)*10)/10))} style={{background:"none",border:"none",color:"rgba(255,255,255,0.55)",cursor:"pointer",fontSize:18,fontWeight:700,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6}}>−</button>
-            <span style={{color:"rgba(255,255,255,0.35)",fontFamily:"monospace",fontSize:12,minWidth:36,textAlign:"center"}}>{Math.round(scale*100)}%</span>
-            <button onClick={() => setScale(s => Math.min(1.5, Math.round((s+0.1)*10)/10))} style={{background:"none",border:"none",color:"rgba(255,255,255,0.55)",cursor:"pointer",fontSize:18,fontWeight:700,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6}}>+</button>
-          </div>
-          <button onClick={() => { setRunning(false); setModal("edit"); }} style={{background:"rgba(255,107,0,0.1)",border:"1px solid rgba(255,107,0,0.28)",color:"#FF6B00",borderRadius:9,padding:"8px 14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:13}}>✏️ ערוך אימון</button>
-          <button onClick={() => setToolbarOpen(o=>!o)} style={{background:toolbarOpen?"rgba(255,107,0,0.2)":"rgba(255,255,255,0.05)",border:toolbarOpen?"1px solid rgba(255,107,0,0.5)":"1px solid rgba(255,255,255,0.1)",color:toolbarOpen?"#FF6B00":"rgba(255,255,255,0.6)",borderRadius:9,padding:"8px 16px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:15}}>☰</button>
+          {remoteOn && roomCode && (
+            <button onClick={() => setModal("remote")} title="חיבור שלט רחוק בנייד" style={{display:"flex",alignItems:"center",gap:7,background:"rgba(255,255,255,0.04)",border:"1px solid "+(tvLink.remoteConnected?"rgba(46,204,113,0.45)":"rgba(255,255,255,0.08)"),borderRadius:9,padding:"8px 12px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13,fontWeight:700,color:tvLink.remoteConnected?"rgba(46,204,113,0.9)":"rgba(255,255,255,0.5)"}}>
+              <span style={{width:7,height:7,borderRadius:"50%",flexShrink:0,background:tvLink.remoteConnected?"#2ecc71":tvLink.status==="online"?"rgba(255,179,71,0.8)":"rgba(255,68,68,0.7)"}}/>
+              📱 שלט רחוק
+            </button>
+          )}
+          {!projection && (
+            <>
+              <div style={{display:"flex",alignItems:"center",gap:4,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:9,padding:"4px 6px"}}>
+                <button onClick={() => setScale(s => Math.max(0.5, Math.round((s-0.1)*10)/10))} style={{background:"none",border:"none",color:"rgba(255,255,255,0.55)",cursor:"pointer",fontSize:18,fontWeight:700,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6}}>−</button>
+                <span style={{color:"rgba(255,255,255,0.35)",fontFamily:"monospace",fontSize:12,minWidth:36,textAlign:"center"}}>{Math.round(scale*100)}%</span>
+                <button onClick={() => setScale(s => Math.min(1.5, Math.round((s+0.1)*10)/10))} style={{background:"none",border:"none",color:"rgba(255,255,255,0.55)",cursor:"pointer",fontSize:18,fontWeight:700,width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:6}}>+</button>
+              </div>
+              <button onClick={() => { setRunning(false); setModal("edit"); }} style={{background:"rgba(255,107,0,0.1)",border:"1px solid rgba(255,107,0,0.28)",color:"#FF6B00",borderRadius:9,padding:"8px 14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:13}}>✏️ ערוך אימון</button>
+            </>
+          )}
+          <button onClick={() => setToolbarOpen(o=>!o)} style={{background:toolbarOpen?"rgba(255,107,0,0.2)":"rgba(255,255,255,0.05)",border:toolbarOpen?"1px solid rgba(255,107,0,0.5)":"1px solid rgba(255,255,255,0.1)",color:toolbarOpen?"#FF6B00":"rgba(255,255,255,"+(projection?"0.22":"0.6")+")",borderRadius:9,padding:"8px 16px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:15,opacity:projection?0.5:1}}>☰</button>
         </div>
       </div>
 
@@ -1032,6 +1066,8 @@ export default function JudoTV() {
             </div>
           )}
 
+          {!projection && (
+          <>
           <div style={{display:"flex",gap:5,justifyContent:"center",flexWrap:"wrap",alignItems:"center"}}>
             {[[-60,"- דקה"],[-30,"- 30ש׳"],[-10,"- 10ש׳"],[10,"+ 10ש׳"],[30,"+ 30ש׳"],[60,"+ דקה"]].map(([s,l]) => (
               <button key={s} onClick={() => addTime(s)} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:s>0?"rgba(0,229,255,0.72)":"rgba(255,107,0,0.72)",borderRadius:8,padding:"8px 13px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:14,fontWeight:700}}>{l}</button>
@@ -1056,9 +1092,11 @@ export default function JudoTV() {
 
           <div style={{display:"flex",gap:9,justifyContent:"center",flexWrap:"wrap"}}>
             <button onClick={() => goToDrill(drillIdx-1)} disabled={drillIdx===0} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:drillIdx===0?"rgba(255,255,255,0.1)":"#fff",borderRadius:11,padding:"13px 20px",cursor:drillIdx===0?"not-allowed":"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:17}}>קודם</button>
-            <button onClick={() => { initCtx(); setRunning(r => { const next = !r; if (next) startBeep(); return next; }); }} style={{background:running?"linear-gradient(135deg,#ff4444,#a82020)":"linear-gradient(135deg,#2ecc71,#1f9c54)",border:"none",color:"#fff",borderRadius:13,padding:"13px 48px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:900,fontSize:21,boxShadow:running?"0 5px 22px rgba(255,68,68,0.38)":"0 5px 22px rgba(46,204,113,0.38)",minWidth:150}}>{running?"⏸ עצור":"▶ הפעל"}</button>
+            <button onClick={() => { unlockAudio(); setRunning(r => { const next = !r; if (next) startBeep(); return next; }); }} style={{background:running?"linear-gradient(135deg,#ff4444,#a82020)":"linear-gradient(135deg,#2ecc71,#1f9c54)",border:"none",color:"#fff",borderRadius:13,padding:"13px 48px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:900,fontSize:21,boxShadow:running?"0 5px 22px rgba(255,68,68,0.38)":"0 5px 22px rgba(46,204,113,0.38)",minWidth:150}}>{running?"⏸ עצור":"▶ הפעל"}</button>
             <button onClick={nextPhaseManual} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:"#fff",borderRadius:11,padding:"13px 20px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:17}}>הבא</button>
           </div>
+          </>
+          )}
 
           <div style={{textAlign:"center",color:"rgba(255,255,255,0.17)",fontSize:13,minHeight:20}}>
             {nextPhase ? "הבא: "+nextPhase.label+" "+fmt(nextPhase.duration) : nextDrill ? "תרגיל הבא: "+nextDrill.name : ""}
@@ -1137,7 +1175,13 @@ export default function JudoTV() {
               <button onClick={() => { setRunning(false); setModal("edit"); setToolbarOpen(false); setTimeout(()=>document.getElementById("tab-judokas")?.click(),100); }} style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.7)",borderRadius:12,padding:"14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:16}}>👥 חברי הנבחרת</button>
             </div>
 
-            {/* Row 3: Sound settings */}
+            {/* Row 3: TV / remote */}
+            <div style={{display:"flex",gap:12}}>
+              <button onClick={() => { setProjection(p=>!p); setToolbarOpen(false); }} style={{flex:1,background:projection?"rgba(255,107,0,0.2)":"rgba(255,255,255,0.05)",border:projection?"1px solid rgba(255,107,0,0.5)":"1px solid rgba(255,255,255,0.1)",color:projection?"#FF6B00":"rgba(255,255,255,0.7)",borderRadius:12,padding:"14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:16}}>📺 מצב הקרנה {projection?"— פעיל":""}</button>
+              <button onClick={() => { setModal("remote"); setToolbarOpen(false); }} style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.7)",borderRadius:12,padding:"14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:16}}>📱 שלט רחוק</button>
+            </div>
+
+            {/* Row 4: Sound settings */}
             <div style={{background:"rgba(255,255,255,0.03)",borderRadius:12,padding:"14px 16px"}}>
               <div style={{color:"rgba(255,255,255,0.4)",fontSize:12,marginBottom:10}}>הגדרות צליל</div>
               <div style={{display:"flex",gap:8}}>
@@ -1153,6 +1197,17 @@ export default function JudoTV() {
       {modal==="edit" && <EditorModal drills={drills} setDrills={d=>{setDrills(d);if(drillIdx>=d.length)setDrillIdx(Math.max(0,d.length-1));}} currentIndex={drillIdx} judokas={judokas} setJudokas={setJudokas} pairs={pairs} setPairs={setPairs} onClose={()=>setModal(null)}/>}
       {modal==="workouts" && <WorkoutModal drills={drills} judokas={judokas} pairs={pairs} onLoad={w=>{if(w.drills)setDrills(w.drills);if(w.judokas)setJudokas(w.judokas);if(w.pairs)setPairs(w.pairs);setDrillIdx(0);setRunning(false);}} onClose={()=>setModal(null)}/>}
       {modal==="attendance" && <AttendanceModal judokas={judokas} onClose={()=>setModal(null)}/>}
+      {modal==="remote" && (
+        <RemotePairingModal
+          roomCode={roomCode}
+          remoteOn={remoteOn}
+          setRemoteOn={setRemoteOn}
+          onNewCode={newRoomCode}
+          status={tvLink.status}
+          connected={tvLink.remoteConnected}
+          onClose={()=>setModal(null)}
+        />
+      )}
       </div>
     </div>
   );
