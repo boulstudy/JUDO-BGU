@@ -144,27 +144,44 @@ profiles  (id → auth.users, display_name, club_id, role)          -- coach | a
 groups    (id, club_id, name, color)
 athletes  (id, club_id, group_id, name, belt, side, personal_drills jsonb)
 drills    (id, owner_id, club_id, name, section, type, spec jsonb,
-           visibility default 'public', forked_from, tags text[], uses)
+           visibility default 'shared', forked_from, tags text[], uses)
 plans     (id, owner_id, club_id, group_id, name, drills jsonb,
-           visibility default 'public')                            -- מערכי אימון
+           visibility default 'shared')                            -- מערכי אימון
+club_invites (code, club_id, created_by, expires_at, used_by)       -- צירוף מאמן
 sessions  (id, club_id, group_id, plan_id, coach_id, started_at, ended_at,
            drills jsonb, present_ids jsonb, notes, stats jsonb)     -- היסטוריה
 ```
 
+**גבול הקטלוג — הוחלט: המועדון.** "משותף" פירושו גלוי למאמני אותו מועדון,
+לא לכל הפלטפורמה. לכן גם התווית בממשק לא תהיה "ציבורי" אלא **👥 משותף למועדון**,
+כדי שהמתג יגיד את האמת. ברירת המחדל היא משותף, והמתג הוא 🔒 **פרטי**.
+
 **RLS:**
-- `drills` / `plans` — קריאה: `visibility='public' OR owner_id = auth.uid() OR club_id = my_club()`.
-  כתיבה ומחיקה: `owner_id = auth.uid()` בלבד.
+```sql
+-- drills / plans — קריאה
+club_id = my_club() AND (visibility = 'shared' OR owner_id = auth.uid())
+-- drills / plans — כתיבה ומחיקה
+owner_id = auth.uid()
+```
 - כל השאר — מוגבל ל-`club_id = my_club()`.
 - פונקציית עזר `my_club()` שקוראת מ-`profiles`.
-
-**ברירת מחדל ציבורית + מתג 🔒 פרטי** בטופס התרגיל והמערך — בדיוק כמו שביקשת.
+- הערך בעמודה נקרא `'shared'` ולא `'public'`, כדי שהסכימה לא תשקר לגבי ההיקף.
+  אם בעתיד נרצה קטלוג חוצה־מועדונים, זה ערך שלישי (`'public'`) ולא שינוי משמעות.
 
 **עריכת תרגיל של מאמן אחר = פיצול (fork).** נוצר עותק עם `owner_id = אני`
-ו-`forked_from = המקור`. אף פעם לא משנים שורה של מאמן אחר.
+ו-`forked_from = המקור`. אף פעם לא משנים שורה של מאמן אחר — רלוונטי כפליים
+עכשיו, כשכמה מאמנים חולקים מועדון ורואים אחד את התרגילים של השני.
 
-**התחברות:** Supabase Auth. `app/lib/auth.js` חדש; `supa()` מתרחב לשלוח את ה-JWT
-של המשתמש במקום ה-anon key, עם רענון שקט. `/` מציג מסך התחברות בלי session;
-`/tv` לא דורש התחברות בכלל.
+**מועדון = כמה מאמנים.** `profiles.club_id` משייך מאמן למועדון, וכל הקבוצות,
+הספורטאים והמערכים משותפים לכל מאמני המועדון. צריך גם מסלול הצטרפות: המאמן
+הראשון יוצר מועדון והופך ל-`admin`, ומזמין מאמנים נוספים בקוד הזמנה
+(`club_invites`, קוד קצר עם תפוגה) — בלי זה אין דרך למאמן שני להיכנס למועדון.
+
+**התחברות: אימייל + סיסמה.** Supabase Auth. `app/lib/auth.js` חדש; `supa()`
+מתרחב לשלוח את ה-JWT של המשתמש במקום ה-anon key, עם רענון שקט. `/` מציג מסך
+התחברות בלי session; `/tv` לא דורש התחברות בכלל.
+אין תלות בהגעת מייל ברגע האמת — מה שחשוב באולם עם קליטה גרועה. איפוס סיסמה
+כן ישתמש במייל, אבל זה מסלול נדיר ולא חוסם כניסה לאימון.
 
 **הגירה:** `drill_library → drills`, `workouts → plans`, `attendance → sessions`,
 הכול משויך למועדון "BGU" ולמשתמש שלך. סקריפט אידמפוטנטי, אפשר להריץ פעמיים.
@@ -205,9 +222,13 @@ sessions  (id, club_id, group_id, plan_id, coach_id, started_at, ended_at,
 
 ---
 
-## 10. שאלות שצריך לענות עליהן לפני שלב 3
+## 10. מה שהוכרע
 
-1. **התחברות** — אימייל + סיסמה, קישור קסם למייל, או Google?
-2. **מועדון** — כמה מאמנים חולקים קבוצות, או מאמן אחד = מועדון אחד?
-3. **"ציבורי" בקטלוג** — גלוי לכל המאמנים בפלטפורמה, או רק בתוך המועדון?
-4. **`/` הופך לאפליקציה** — מי ששמר את הטלויזיה בכתובת `/` יצטרך לעבור ל-`/tv`. בסדר?
+| שאלה | ההחלטה | מה זה גורר |
+|---|---|---|
+| התחברות | אימייל + סיסמה | בלי תלות בהגעת מייל בזמן אימון |
+| מועדון | כמה מאמנים חולקים מועדון | צריך `club_invites` וקוד הצטרפות |
+| היקף הקטלוג | בתוך המועדון בלבד | הערך הוא `'shared'`, והתווית "משותף למועדון" |
+| כתובות | `/` היא האפליקציה | הטלויזיה ב-`/tv`, ו-`/remote` מפנה לאפליקציה |
+
+נותר פתוח, ולא חוסם: האם למאמן זמני (מחליף) צריך תפקיד נפרד מ-`coach`.
