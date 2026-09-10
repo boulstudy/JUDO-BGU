@@ -47,6 +47,7 @@ app/
     page.js               /tv — מקלט ההקרנה
     ProjectionReceiver.jsx  מצטרף בקוד (או מייצר אחד), גזירת שעון, צליל, השתלטות
   coach/
+    AuthGate.jsx            התחברות + אונבורדינג מועדון — מאחורי NEXT_PUBLIC_ENABLE_CLUBS
     CoachApp.jsx           ★ הקליפה — מצב בית/אימון, שחזור אימון, נעילת מסך
     ManageTab.jsx           "ניהול אימון" — שעון, בקרה, מערך, הערות
     ProjectionTab.jsx       "הקרנה" — FittedProjection + חיבור/ניתוק מסך
@@ -71,6 +72,10 @@ app/
     remoteProtocolV1.js   הפרוטוקול הישן — משרת את / ו-/remote עד שלב 2
     linkV1.js             useTvLink / useRemoteLink הישנים
     wakeLock.js           useWakeLock
+supabase/
+  schema.sql               טבלאות + RLS — אומת נגד Postgres 16 אמיתי, ר׳ "מצב נוכחי"
+  migrate.sql               drill_library/workouts/attendance → הסכימה החדשה
+  backup.sql                להריץ ראשון, לפני הכל
 public/
   manifest.json           PWA לאפליקציית המאמן (standalone, portrait) — "/"
   remote-manifest.json    PWA ישן ל-/remote — נשאר כדי לא לשבור התקנה קיימת
@@ -182,6 +187,7 @@ test/unit/run.js                 מריץ כל *.test.js — בלי דפדפן, 
 test/unit/sessionEngine.test.js  39 בדיקות — דריפט, catch-up, עריכה תוך כדי
 test/unit/remoteProtocol.test.js שער הבעלות: זר, replay, גרסה, השתלטות
 test/unit/roomCode.test.js       אורך, אלפבית, נרמול
+test/unit/authPure.test.js       תפוגת טוקן, תרגום שגיאות
 test/relay.js                    ממסר Phoenix מקומי (דורש: npm i --no-save ws)
 test/e2e-projection.js           13 בדיקות v2 — סקריפט משחק את הנייד מול /tv
 test/e2e-remote.js               25 בדיקות v1
@@ -224,7 +230,7 @@ timeLeft = running ? remaining - (now - at)/1000 : remaining
 
 **ענף:** `claude/workout-management-pwa-konied` · תוכנית: `docs/PLAN-V2.md`
 
-### שלבים 0-2 הושלמו
+### שלבים 0-3 הושלמו (חלקית — ר׳ תת-סעיף)
 
 **שלב 0 — שהכשלון יהיה רועש**
 - `supa()` מחזיר `{data, error}` במקום `null` שקט; כל 12 הקוראים עודכנו.
@@ -252,7 +258,42 @@ timeLeft = running ? remaining - (now - at)/1000 : remaining
   על המסך → לחיצת ▶ בנייד מניעה שעון גזור בזמן אמת על המסך, בלי טיקים ברשת.
 - תוקן באג bidi אמיתי שנתפס בבדיקה הידנית: ר׳ "מלכודות #4" למעלה.
 
+**שלב 3 — מועדונים, התחברות, קטלוג משותף**
+
+**מה כן אומת (בלי Supabase אמיתי — הוא חסום מסביבת הפיתוח):**
+- `supabase/schema.sql` הורץ נגד **Postgres 16 אמיתי** (מותקן מקומית), פעמיים
+  ברצף בלי שגיאה — הסכימה בטוחה להרצה חוזרת.
+- **12 תרחישי RLS יריבים** נבדקו עם משתמשים אמיתיים ותפקיד `authenticated`
+  (לא superuser): בידוד מועדונים, כתיבה חוצת-מועדון נדחית, תרגיל פרטי לא נראה
+  למאמן אחר, הסלמת הרשאות עצמית נחסמת ע"י trigger, קוד הזמנה שפג/שכבר נוצל
+  נדחה, רק admin רואה את רשימת ההזמנות. **כולם עברו.**
+- `supabase/migrate.sql` הורץ 3 פעמים ברצף נגד Postgres עם נתוני v1 אמיתיים —
+  בריצה הראשונה נמצא ותוקן באג אמיתי (מערכים שוכפלו בכל הרצה כי בדיקת
+  ה-idempotency בדקה סמן שמעולם לא נכתב בפועל). אחרי התיקון: תוצאה זהה
+  ומדויקת (1 מכל טבלה) בשלוש ריצות.
+- `app/lib/authPure.js` — 15 בדיקות יחידה (חישוב תפוגת טוקן, תרגום שגיאות).
+- מסך ההתחברות ואונבורדינג המועדון עלו בדפדפן אמיתי בלי קריסה (build עם
+  `NEXT_PUBLIC_ENABLE_CLUBS=1`).
+
+**מה לא אומת (ולא יכול להיות, מהסביבה הזו):** התחברות אמיתית מול GoTrue,
+יצירת מועדון אמיתית מקצה לקצה מול הפרויקט האמיתי. **אתה צריך:**
+1. להריץ `supabase/backup.sql`, ואז `supabase/schema.sql`, ואז (אחרי שתערוך
+   את `target_owner` ב) `supabase/migrate.sql` — ב-SQL Editor של Supabase.
+2. להוסיף ל-Vercel/`.env.local`: `NEXT_PUBLIC_ENABLE_CLUBS=1`.
+3. לוודא ב-Supabase Auth settings שהתחברות באימייל+סיסמה פעילה (ואם רוצים
+   לדלג על אישור מייל בשלב הזה — לכבות "Confirm email").
+
+**דגל הפעלה (`NEXT_PUBLIC_ENABLE_CLUBS`):** בכוונה. עד שה-SQL רץ בפועל על
+הפרויקט האמיתי, האפליקציה חייבת להמשיך לעבוד בדיוק כמו שלב 2 — local-first,
+בלי מסך התחברות. הדגל כבוי כברירת מחדל בדיוק בשביל זה. `app/lib/clubData.js`
+כתוב ומוכן (שכבת CRUD מוגבלת-מועדון תואמת RLS) אבל `store.js` **עדיין לא
+מחובר אליו** — זה הצעד הבא, ודורש בדיקה מול הפרויקט האמיתי לפני שהוא הופך
+לנתיב הראשי, כדי לא להחליף אפליקציה עובדת בקוד לא מאומת.
+
 **מה עוד לא ממומש בכוונה (מתוכנן לשלבים הבאים):**
+- חיבור `store.js` ל-`clubData.js` בפועל (ר׳ למעלה).
+- UI ליצירת קוד הזמנה והצגתו (הפונקציה `makeInvite` קיימת ב-`clubData.js`,
+  אין עדיין מסך "הזמן מאמן" ב-More tab).
 - תור "טיוטה" נפרד להקרנה — כרגע כל פעולה בטאב ניהול אימון משפיעה מיד על
   המסך (`dirty` תמיד `false` ב-`CoachApp.jsx`). הפרוטוקול והרנדרר כבר תומכים
   ב-live/draft; חסר רק ה-UI שמצטבר עריכות לפני דחיפה.
