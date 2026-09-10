@@ -150,7 +150,10 @@ export function ProjectionScreen({ state = {}, clean = false, muted = false }) {
 
         <div style={{ minWidth: 150, textAlign: "left" }}>
           <div style={{ color: "rgba(255,255,255,0.22)", fontSize: 11 }}>תרגיל</div>
-          <div style={{ fontFamily: "Oswald,sans-serif", fontSize: 19 }}>
+          {/* Two numbers either side of a neutral "/" get reordered by the RTL
+              bidi algorithm ("1 / 4" renders as "4 / 1") unless the run is
+              pinned to ltr explicitly. */}
+          <div style={{ fontFamily: "Oswald,sans-serif", fontSize: 19, direction: "ltr" }}>
             {drills.length ? Math.min(drillIdx + 1, drills.length) + " / " + drills.length : "—"}
           </div>
         </div>

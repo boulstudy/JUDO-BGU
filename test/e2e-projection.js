@@ -123,7 +123,15 @@ const bodyText = page => page.evaluate(() => document.body.innerText);
   page.on('pageerror', e => console.log('    [page error]', e.message));
 
   // ── pairing ────────────────────────────────────────────────────────────────
+  // The TV is the side with nothing to type on: it mints its own code on load
+  // and shows it, waiting for a phone. Manual entry is a fallback path for
+  // rejoining a specific room, reached through "הקלד קוד אחר".
   await page.goto(APP + '/tv', { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(800);
+  check('generates and displays its own code on first load, unprompted',
+    /[A-Z0-9]{6}/.test((await bodyText(page)).replace(/\s/g, '')));
+
+  await page.click('text=הקלד קוד אחר');
   await page.waitForSelector('#tv-room-code', { timeout: 10000 });
 
   await page.fill('#tv-room-code', 'A0K1QP');

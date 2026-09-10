@@ -30,6 +30,7 @@ const shell = {
 export default function ProjectionReceiver() {
   const [room, setRoom]   = useState("");
   const [typed, setTyped] = useState("");
+  const [manual, setManual] = useState(false);   // "type a different code" override
   const [ready, setReady] = useState(false);
   const [audioOn, setAudioOn] = useState(false);
   const [soundType, setSoundType] = useState("beep");
@@ -39,15 +40,18 @@ export default function ProjectionReceiver() {
 
   useWakeLock(!!room);
 
-  // The code can arrive in the URL (a link the coach opened on this screen), or
-  // be remembered from last time so a TV that reboots rejoins on its own.
+  // Pairing starts here, not on the phone: this screen is the one with nothing
+  // to type on, so it mints the code and displays it, and the coach reads it
+  // off the wall. A link with the code in the hash (opened via "קישור למסך" on
+  // an already-paired phone, or a stored code from a reboot) skips straight to
+  // waiting instead of generating a new one.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const fromHash = normalizeRoomCode((window.location.hash || "").replace(/^#/, ""));
     let stored = "";
     try { stored = normalizeRoomCode(window.localStorage.getItem(STORE_KEY) || ""); } catch (e) {}
-    const initial = isValidRoomCode(fromHash) ? fromHash : isValidRoomCode(stored) ? stored : "";
-    if (initial) setRoom(initial);
+    const initial = isValidRoomCode(fromHash) ? fromHash : isValidRoomCode(stored) ? stored : makeRoomCode();
+    setRoom(initial);
     setReady(true);
   }, []);
 
@@ -104,7 +108,13 @@ export default function ProjectionReceiver() {
     if (!isValidRoomCode(c)) return;
     setRoom(c);
     setTyped("");
+    setManual(false);
   }, [typed]);
+
+  const newCode = useCallback(() => {
+    setRoom(makeRoomCode());
+    setManual(false);
+  }, []);
 
   const leave = useCallback(() => {
     setRoom("");
@@ -114,7 +124,14 @@ export default function ProjectionReceiver() {
   if (!ready) return <div style={shell} />;
 
   // ── not paired yet ─────────────────────────────────────────────────────────
-  if (!room) return <PairingScreen typed={typed} setTyped={setTyped} onJoin={join} />;
+  if (!room || manual) {
+    return (
+      <PairingScreen
+        typed={typed} setTyped={setTyped} onJoin={join}
+        onBack={room ? () => setManual(false) : null}
+      />
+    );
+  }
 
   const state = link.heavy ? {
     ...link.heavy,
@@ -135,7 +152,7 @@ export default function ProjectionReceiver() {
           style={{ width: "100vw", height: "100vh" }}
         />
       ) : (
-        <WaitingScreen room={room} status={link.status} onLeave={leave} />
+        <WaitingScreen room={room} status={link.status} onNewCode={newCode} onManual={() => setManual(true)} />
       )}
 
       {/* The AudioContext can only start from a tap on this device — a "play"
@@ -168,16 +185,16 @@ export default function ProjectionReceiver() {
 
 // ── screens ──────────────────────────────────────────────────────────────────
 
-function PairingScreen({ typed, setTyped, onJoin }) {
+function PairingScreen({ typed, setTyped, onJoin, onBack }) {
   const bad = impossibleChars(typed);
   const full = isValidRoomCode(typed);
   return (
     <div style={{ ...shell, flexDirection: "column", gap: 26, padding: 24 }}>
       <div style={{ fontSize: 54 }}>🥋</div>
       <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 30, fontWeight: 900 }}>מסך הקרנה</div>
+        <div style={{ fontSize: 30, fontWeight: 900 }}>הקלדת קוד</div>
         <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 16, marginTop: 6 }}>
-          הקלד כאן את הקוד שמופיע באפליקציה בנייד
+          הקלד כאן קוד שכבר קיים — למשל כדי לחזור לאימון שהתחיל במסך אחר
         </div>
       </div>
 
@@ -211,11 +228,17 @@ function PairingScreen({ typed, setTyped, onJoin }) {
         cursor: full ? "pointer" : "not-allowed",
         fontFamily: "Heebo,sans-serif", fontSize: 20, fontWeight: 900,
       }}>התחבר</button>
+      {onBack && (
+        <button onClick={onBack} style={{
+          background: "none", border: "none", color: "rgba(255,255,255,0.4)",
+          cursor: "pointer", fontFamily: "Heebo,sans-serif", fontSize: 14,
+        }}>ביטול</button>
+      )}
     </div>
   );
 }
 
-function WaitingScreen({ room, status, onLeave }) {
+function WaitingScreen({ room, status, onNewCode, onManual }) {
   const label = status === "online" ? "מחובר — ממתין לשלט" :
                 status === "connecting" ? "מתחבר…" : "אין חיבור לרשת";
   return (
@@ -229,11 +252,18 @@ function WaitingScreen({ room, status, onLeave }) {
       <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 15, maxWidth: 460, textAlign: "center", lineHeight: 1.7 }}>
         פתח את האפליקציה בנייד, בחר אימון ולחץ "התחל אימון" — ואז הזן את הקוד הזה בטאב ההקרנה.
       </div>
-      <button onClick={onLeave} style={{
-        background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
-        color: "rgba(255,255,255,0.5)", borderRadius: 10, padding: "10px 20px",
-        cursor: "pointer", fontFamily: "Heebo,sans-serif", fontSize: 14, marginTop: 8,
-      }}>קוד אחר</button>
+      <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+        <button onClick={onNewCode} style={{
+          background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
+          color: "rgba(255,255,255,0.5)", borderRadius: 10, padding: "10px 20px",
+          cursor: "pointer", fontFamily: "Heebo,sans-serif", fontSize: 14,
+        }}>🔄 קוד חדש</button>
+        <button onClick={onManual} style={{
+          background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.12)",
+          color: "rgba(255,255,255,0.5)", borderRadius: 10, padding: "10px 20px",
+          cursor: "pointer", fontFamily: "Heebo,sans-serif", fontSize: 14,
+        }}>הקלד קוד אחר</button>
+      </div>
     </div>
   );
 }

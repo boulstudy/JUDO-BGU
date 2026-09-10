@@ -1,5 +1,5 @@
-import JudoTrainer from './JudoTrainer';
+import CoachApp from "./coach/CoachApp";
 
 export default function Home() {
-  return <JudoTrainer />;
+  return <CoachApp />;
 }
