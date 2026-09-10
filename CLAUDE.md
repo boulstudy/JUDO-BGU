@@ -46,6 +46,8 @@ app/
   tv/
     page.js               /tv — מקלט ההקרנה
     ProjectionReceiver.jsx  מצטרף בקוד (או מייצר אחד), גזירת שעון, צליל, השתלטות
+  sw-kill/
+    page.js, KillSwitch.jsx  איפוס חירום — מבטל SW, מנקה caches ו-localStorage
   coach/
     AuthGate.jsx            התחברות + אונבורדינג מועדון — מאחורי NEXT_PUBLIC_ENABLE_CLUBS
     CoachApp.jsx           ★ הקליפה — מצב בית/אימון, שחזור אימון, נעילת מסך
@@ -76,7 +78,10 @@ supabase/
   schema.sql               טבלאות + RLS — אומת נגד Postgres 16 אמיתי, ר׳ "מצב נוכחי"
   migrate.sql               drill_library/workouts/attendance → הסכימה החדשה
   backup.sql                להריץ ראשון, לפני הכל
+scripts/
+  make-icons.js             מצייר PNG עם node:zlib בלבד, אין תלות תמונה
 public/
+  sw.js                    service worker — caching בזמן ריצה, לא precache manifest
   manifest.json           PWA לאפליקציית המאמן (standalone, portrait) — "/"
   remote-manifest.json    PWA ישן ל-/remote — נשאר כדי לא לשבור התקנה קיימת
   tv-manifest.json        PWA להקרנה (fullscreen, landscape) — "/tv"
@@ -230,7 +235,7 @@ timeLeft = running ? remaining - (now - at)/1000 : remaining
 
 **ענף:** `claude/workout-management-pwa-konied` · תוכנית: `docs/PLAN-V2.md`
 
-### שלבים 0-3 הושלמו (חלקית — ר׳ תת-סעיף)
+### שלבים 0-4 הושלמו (3 חלקית — ר׳ תת-סעיף)
 
 **שלב 0 — שהכשלון יהיה רועש**
 - `supa()` מחזיר `{data, error}` במקום `null` שקט; כל 12 הקוראים עודכנו.
@@ -294,6 +299,35 @@ timeLeft = running ? remaining - (now - at)/1000 : remaining
 - חיבור `store.js` ל-`clubData.js` בפועל (ר׳ למעלה).
 - UI ליצירת קוד הזמנה והצגתו (הפונקציה `makeInvite` קיימת ב-`clubData.js`,
   אין עדיין מסך "הזמן מאמן" ב-More tab).
+
+**שלב 4 — PWA אמיתי**
+
+- `public/sw.js` — לא מנסה לבנות precache manifest מדויק של קבצי Next
+  ה-hashed (זה דורש שלב build נוסף לשמור על סנכרון). במקום זה: caching
+  בזמן ריצה — navigation ב-network-first עם נפילה ל-shell שמור, נכסים
+  סטטיים (`/_next/static/`, אייקונים) ב-cache-first, REST של Supabase
+  ב-network-first עם נפילה למטמון. כתיבות (לא-GET) **אף פעם** לא נכנסות
+  ל-cache ולא מיורטות — עוברות ישר לרשת.
+- **אומת בדפדפן אמיתי:** רענון מלא של הדף **במצב אופליין מוחלט**
+  (`context.setOffline(true)`) עדיין מציג את האפליקציה האמיתית עם האימון
+  שנשמר — לא דף שגיאה של הדפדפן. זו הבדיקה שהוכיחה שהאסטרטגיה עובדת, לא רק
+  שהקוד קומפל.
+- `/sw-kill` — מבטל את כל ה-service workers, מנקה את שני ה-caches, מנקה
+  `localStorage` בעל קידומת `judo.`. אומת: 1 worker בוטל, 2 caches נמחקו,
+  והאפליקציה חוזרת לעבוד נכון אחרי זה.
+- `app/lib/pwaInstall.js` — `useServiceWorker()` (רישום אחרי load, לא
+  לפניו) ו-`useInstallPrompt()` (Android/Chrome עם `beforeinstallprompt`
+  אמיתי; iOS מזוהה בנפרד ומקבל הוראות ידניות כי אין שם אירוע כזה בכלל).
+  כרטיס התקנה ב-More tab.
+- `app/lib/writeQueue.js` — תור כתיבות אופליין ב-localStorage (לא
+  IndexedDB — הנפחים כאן קטנים מדי כדי להצדיק את זה). `writeOrQueue()`
+  מבחין כתיבה שנכשלה מרשת (מתעדפת, יורדת לתור) מכתיבה שהשרת דחה במפורש
+  (לא נכנסת לתור — ניסיון חוזר על דבר שהשרת דחה זה לולאה שקטה, לא רשת).
+  מסונכרן אוטומטית באירוע `online`. מחובר בפועל ל-`pushPlan()` ב-`store.js`;
+  `clubData.js` מתועד להתחבר אליו כשהוא יזוזק לנתיב החי (ר׳ הערה בקובץ).
+- safe-area: נמצא ותוקן חור אמיתי — פס הבקרה הצף ב-`ManageTab` (▶/⏸ וניווט
+  תרגילים) לא היה לו `padding-bottom` בטוח, כלומר בדיוק הכפתור הכי חשוב
+  היה יכול לשבת מתחת לפס הבית באייפון.
 - תור "טיוטה" נפרד להקרנה — כרגע כל פעולה בטאב ניהול אימון משפיעה מיד על
   המסך (`dirty` תמיד `false` ב-`CoachApp.jsx`). הפרוטוקול והרנדרר כבר תומכים
   ב-live/draft; חסר רק ה-UI שמצטבר עריכות לפני דחיפה.

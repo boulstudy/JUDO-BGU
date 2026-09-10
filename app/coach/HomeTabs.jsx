@@ -15,6 +15,7 @@ import DrillEditor, { blankDrill } from "./DrillEditor";
 import { SEC_COLOR, DRILL_SECTIONS } from "../lib/shared";
 import { fmt, totalDrillTime, totalWorkoutTime } from "../lib/sessionEngine";
 import { longDate, relativeDate } from "../lib/localDate";
+import { useInstallPrompt } from "../lib/pwaInstall";
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
@@ -335,10 +336,28 @@ export function CatalogTab({ catalog }) {
 
 export function MoreTab({ history, settings, onSettings, onPairTv, room }) {
   const [showHistory, setShowHistory] = useState(false);
+  const install = useInstallPrompt();
 
   return (
     <>
       <Screen>
+        {!install.installed && (install.canPrompt || install.platform === "ios") && (
+          <Card style={{ background: "rgba(255,107,0,0.08)", border: "1px solid rgba(255,107,0,0.3)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span style={{ fontSize: 24 }}>📲</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>התקן כאפליקציה</div>
+                <div style={{ color: C.ink3, fontSize: 12.5, marginTop: 2 }}>
+                  {install.platform === "ios"
+                    ? "שתף ⬆ ← הוסף למסך הבית"
+                    : "פתיחה מהירה, בלי דפדפן, גם בלי רשת"}
+                </div>
+              </div>
+              {install.canPrompt && <Btn size="sm" variant="primary" onClick={install.promptInstall}>התקן</Btn>}
+            </div>
+          </Card>
+        )}
+
         <Card onClick={() => setShowHistory(true)}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>

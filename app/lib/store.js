@@ -13,7 +13,8 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supa, supaOr } from "./supabase";
-import { notifyError } from "./notify";
+import { notifyError, notify } from "./notify";
+import { writeOrQueue } from "./writeQueue";
 import { read, write, KEYS } from "./persist";
 import { localDate } from "./localDate";
 
@@ -181,10 +182,15 @@ export async function pullLegacyWorkouts() {
 }
 
 export async function pushPlan(plan) {
-  const { error } = await supa("workouts", {
+  // A network failure here is not "the save failed" — the plan is already
+  // safe in localStorage, this is only the best-effort cloud mirror. Queue it
+  // and say so, rather than reporting a failure the coach can't do anything
+  // about mid-hall.
+  const { error, queued } = await writeOrQueue("workouts", {
     method: "POST",
     body: JSON.stringify({ date: localDate(), name: plan.name, drills: plan.drills, judokas: [], pairs: [] }),
-  });
+  }, "מערך: " + plan.name);
+  if (queued) { notify("אין רשת — המערך יעלה לענן כשהיא תחזור", "info"); return true; }
   if (error) { notifyError(error, "המערך נשמר במכשיר אבל לא בענן"); return false; }
   return true;
 }

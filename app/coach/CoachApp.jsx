@@ -25,6 +25,8 @@ import { useWakeLock } from "../lib/wakeLock";
 import { read, write, drop, KEYS } from "../lib/persist";
 import { normalizeRoomCode, isValidRoomCode } from "../lib/roomCode";
 import { notify } from "../lib/notify";
+import { useServiceWorker } from "../lib/pwaInstall";
+import { wireAutoFlush } from "../lib/writeQueue";
 
 const HOME_TABS = [
   { id: "today",   icon: "🏠", label: "היום" },
@@ -89,6 +91,8 @@ export default function CoachApp() {
   });
 
   useWakeLock(!!active);
+  useServiceWorker();
+  useEffect(() => { wireAutoFlush(); }, []);
 
   // Persist the running session so it can be recovered.
   useEffect(() => {

@@ -146,7 +146,8 @@ export default function ManageTab({
       {/* the two controls that matter, always within reach */}
       <div style={{
         position: "absolute", insetInline: 0, bottom: 0, zIndex: 20,
-        padding: "10px 14px", display: "flex", gap: 8,
+        padding: "10px 14px", paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))",
+        display: "flex", gap: 8,
         background: "linear-gradient(to top, rgba(8,10,16,0.98) 60%, rgba(8,10,16,0))",
         pointerEvents: "none",
       }}>

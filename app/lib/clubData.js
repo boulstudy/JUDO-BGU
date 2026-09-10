@@ -14,6 +14,15 @@
 import { supa } from "./supabase";
 import { localDate } from "./localDate";
 
+// NOTE for whoever wires this into store.js: route the mutating calls below
+// (create/update/archive/upsert/start/finish) through writeQueue.js's
+// writeOrQueue() instead of calling supa() directly, the way store.js's
+// pushPlan() already does — that's what turns a dropped connection in the
+// hall into "queued, will sync" instead of a failed save. Left as plain
+// supa() here because this module isn't on the live path yet (see
+// CLAUDE.md) and wiring the queue in before there's a real backend to test
+// the retry behavior against would be unverified guesswork.
+
 const qs = params => Object.entries(params).filter(([, v]) => v !== undefined)
   .map(([k, v]) => k + "=" + v).join("&");
 
