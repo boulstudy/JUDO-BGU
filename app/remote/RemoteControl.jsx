@@ -19,9 +19,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supa, supaOr, SEC_COLOR, fmt, getDrillPhases, totalDrillTime } from "../lib/shared";
 import { notifyError } from "../lib/notify";
 import { DrillForm, Toggle } from "../lib/ui";
-import { useRemoteLink } from "../lib/link";
+import { useRemoteLink } from "../lib/linkV1";
 import { normalizeRoomCode } from "../lib/remoteBus";
-import { COMMANDS } from "../lib/remoteProtocol";
+import { COMMANDS } from "../lib/remoteProtocolV1";
 import { useWakeLock } from "../lib/wakeLock";
 
 const ORANGE = "#FF6B00";

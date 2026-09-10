@@ -28,25 +28,41 @@
 
 ```
 app/
-  page.js                 מסך הטלויזיה
+  page.js                 מסך הטלויזיה (v1 — יוחלף בשלב 2)
   layout.js               metadata + viewport (device-width — קריטי לנייד)
   JudoTrainer.jsx         הטלויזיה: JudoTV, EditorModal, WorkoutModal,
                           AttendanceModal, SplitPanel, RemotePairingModal, useSound
   remote/
     page.js               /remote + manifest נפרד
     RemoteControl.jsx     RemoteControl, ControlTab, WorkoutTab, MoreTab
+  tv/
+    page.js               /tv — מקלט ההקרנה (v2)
+    ProjectionReceiver.jsx  הצמדה בקוד, גזירת שעון, צליל, השתלטות
   lib/
-    shared.js             SUPA_URL/KEY, supa(), DRILL_SECTIONS, SEC_COLOR,
-                          PATTERNS, REST_TIMING, fmt, getDrillPhases,
-                          totalDrillTime, drillClockSignature
+    sessionEngine.js      ★ המנוע — טהור, בלי imports. שעון עוגן, סמן,
+                          מעבר שלב, התאמה לעריכה, סטיית שעונים
+    ProjectionScreen.jsx  ★ הרנדרר היחיד של ההקרנה (+FittedProjection)
+    sessionLink.js        צד הנייד: מחזיק את העוגן ומפרסם אותו
+    projectionLink.js     צד המסך: מקבל עוגן וגוזר ממנו שעון
+    remoteProtocol.js     v2 — MSG, admit(), sessionKey, seq
+    supabase.js           supa() שמחזיר {data, error}
+    notify.js             אפיק טוסטים
+    useSound.js           צלילי האימון
+    roomCode.js           קודי הצמדה (6 תווים, טהור)
+    shared.js             DRILL_SECTIONS, SEC_COLOR, PATTERNS, REST_TIMING
+                          + re-export של המנוע ושל supa
     ui.jsx                TimeWheel, TimePicker, Toggle, DrillForm
     remoteBus.js          לקוח Phoenix/Supabase Realtime מעל WebSocket גולמי
-    remoteProtocol.js     COMMANDS, קבועי תזמון, PATCH_KEYS, pickPatch
-    link.js               useTvLink (טלויזיה), useRemoteLink (נייד)
+    remoteProtocolV1.js   הפרוטוקול הישן — משרת את / ו-/remote עד שלב 2
+    linkV1.js             useTvLink / useRemoteLink הישנים
     wakeLock.js           useWakeLock
 public/
   manifest.json           PWA לטלויזיה (fullscreen, landscape)
   remote-manifest.json    PWA לשלט (standalone, portrait)
+  tv-manifest.json        PWA להקרנה (fullscreen, landscape)
+  icon-*.png              נוצרים ב-`npm run icons` — לא לערוך ידנית
+scripts/
+  make-icons.js           מצייר את האייקונים עם node:zlib בלבד
 test/                     ראה "בדיקות" למטה
 ```
 
@@ -129,22 +145,17 @@ Supabase חסום מסביבת ה-agent, ולכן הבדיקות רצות מול
 פרוטוקול Phoenix. יש בנוסף בודק חד-פעמי שרצים איתו בדפדפן אמיתי מול Supabase.
 
 ```
+test/unit/run.js                 מריץ כל *.test.js — בלי דפדפן, בלי framework
+test/unit/sessionEngine.test.js  39 בדיקות — דריפט, catch-up, עריכה תוך כדי
+test/unit/remoteProtocol.test.js שער הבעלות: זר, replay, גרסה, השתלטות
+test/unit/roomCode.test.js       אורך, אלפבית, נרמול
 test/relay.js                    ממסר Phoenix מקומי (דורש: npm i --no-save ws)
-test/e2e-remote.js               25 בדיקות — טיוטה פרטית, דחיפה, הקוד, מצב הקרנה
-test/e2e-clock.js                10 בדיקות — דיוק השעון ואיפוס תוך כדי עריכה
-test/supabase-realtime-check.html  פותחים בדפדפן — בודק REST + join + round trip
+test/e2e-projection.js           13 בדיקות v2 — סקריפט משחק את הנייד מול /tv
+test/e2e-remote.js               25 בדיקות v1
+test/e2e-clock.js                10 בדיקות v1
+test/supabase-realtime-check.html  פותחים בדפדפן — REST + join + round trip
 ```
 
-הרצה:
-
-```bash
-npm i --no-save ws          # פעם אחת
-npx next build
-node test/relay.js &                                  # פורט 8899
-npx next start -p 3100 &
-node test/e2e-remote.js
-node test/e2e-clock.js
-```
 
 הסקריפטים מזריקים `WebSocket` ממופה לממסר דרך `addInitScript`, כך שקוד
 האפליקציה רץ ללא שינוי. משתני סביבה: `APP`, `RELAY`, `CHROME_PATH`,
@@ -152,11 +163,53 @@ node test/e2e-clock.js
 
 ---
 
-## מצב נוכחי (15.8.2026)
+## שעון העוגן — הרעיון המרכזי של v2
 
-**ענף:** `claude/remote-control-tv-system-tkhbqs` · **PR:** #6 (פתוח, CI ירוק, Vercel Ready)
+אף אחד לא סופר שניות ברשת. הנייד מפרסם **עוגן** — "כך וכך נשאר, ברגע הזה" —
+ושני הצדדים גוזרים ממנו את הזמן, כל 100ms, באותה פונקציה טהורה.
 
-מה הושלם ואומת:
+```js
+{ drillIdx, phaseIdx, running, remaining, elapsed, at }
+timeLeft = running ? remaining - (now - at)/1000 : remaining
+```
+
+`project()` לא רק מחסיר — הוא **מגלגל קדימה** את כל גבולות השלבים שהזמן כבר
+עבר. זה מה שהופך נייד מת לבעיה לא קיימת: המסך אף פעם לא ספר, ולכן אין לו מה
+לפספס. אין catch-up לממש ואין "שעון תקוע" להתגונן ממנו.
+
+לכן גם: **לא להחזיר `setInterval` שסופר** לשום צד. כל שינוי עובר דרך
+`reanchor()` שמעגן מחדש בלי לשנות את מה שהשעון מראה כרגע.
+
+## שער הבעלות בהצמדה
+
+ערוץ broadcast הוא ציבורי, ולכן הקוד לבדו לא מספיק — מי שמצטרף יכול גם לשלוח.
+הנייד מגריל `sessionKey`; המסך **ננעל על המפתח הראשון שראה** ומתעלם מכל אחר,
+עד שאדם מאשר השתלטות על המסך עצמו. `admit()` ב-`remoteProtocol.js` מרכז את
+ההחלטה, ויש לה בדיקות יחידה. `seq` עולה מונוטונית ופוסל הודעה חוזרת.
+
+## מצב נוכחי (10.9.2026)
+
+**ענף:** `claude/workout-management-pwa-konied` · תוכנית: `docs/PLAN-V2.md`
+
+### שלבים 0-1 הושלמו
+
+**שלב 0 — שהכשלון יהיה רועש**
+- `supa()` מחזיר `{data, error}` במקום `null` שקט; כל 12 הקוראים עודכנו.
+- מפתחות ל-`NEXT_PUBLIC_*` עם נפילה לפרויקט הקיים.
+- אייקונים נוצרו (`/icon.png` פשוט לא היה קיים — ההתקנה כ-PWA הייתה שבורה).
+- CI: build + בדיקות יחידה על כל PR, על Node 22.
+
+**שלב 1 — היפוך המנוע**
+- `sessionEngine.js` טהור + 39 בדיקות יחידה.
+- `ProjectionScreen` — רנדרר אחד, קנבס קבוע 1280×720 שמוקטן לכל מיכל.
+- `/tv` — מקלט הקרנה שמצטרף בקוד, גוזר שעון, מנגן צליל, שואל לפני השתלטות.
+- פרוטוקול v2 + שער בעלות + 13 בדיקות e2e.
+- v1 (`/` ו-`/remote`) ממשיך לעבוד ללא שינוי — 35 הבדיקות שלו עדיין עוברות.
+
+**לא נעשה בכוונה:** ההפניה מ-`/remote` ל-`/` נדחתה לשלב 2. כרגע `/` היא עדיין
+הטלויזיה הישנה, ולהפנות עכשיו היה שובר מערכת עובדת לפני שיש לה מחליף.
+
+### מה שהיה קודם (v1) — עדיין נכון
 - שלט מלא בנייד עם טיוטה פרטית, שידור ישיר, עריכת מערך, ספריית תרגילים,
   טעינת אימונים שמורים, הערות והגדרות.
 - מצב הקרנה בטלויזיה.

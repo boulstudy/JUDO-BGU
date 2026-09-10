@@ -10,6 +10,7 @@
 // Messages are plain JSON objects; see app/lib/remoteProtocol.js for the shapes.
 
 import { SUPA_URL, SUPA_KEY } from "./supabase";
+import { roomTopic } from "./roomCode";
 
 const REALTIME_URL =
   SUPA_URL.replace(/^http/, "ws") + "/realtime/v1/websocket?apikey=" + SUPA_KEY + "&vsn=1.0.0";
@@ -19,24 +20,10 @@ const JOIN_TIMEOUT_MS = 12000;
 const MAX_BACKOFF_MS  = 10000;
 const BROADCAST_EVENT = "m";
 
-// Room codes avoid characters that are easy to misread out loud (0/O, 1/I).
-const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-export function makeRoomCode(len = 4) {
-  let out = "";
-  for (let i = 0; i < len; i++) {
-    out += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
-  }
-  return out;
-}
-
-export function normalizeRoomCode(code) {
-  return String(code || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
-}
-
-export function roomTopic(room) {
-  return "realtime:judo-remote-" + normalizeRoomCode(room);
-}
+export {
+  makeRoomCode, normalizeRoomCode, isValidRoomCode, impossibleChars,
+  roomTopic, ROOM_CODE_LEN,
+} from "./roomCode";
 
 /**
  * Opens a broadcast channel for a room.
