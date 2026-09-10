@@ -69,25 +69,47 @@ export default function CoachApp() {
     if (saved && saved.plan) setRecoverable(saved);
   }, []);
 
-  const content = useMemo(() => {
-    if (!active) return { drills: [] };
+  // Everything the projection screen renders, in one shape both "now" and
+  // "after the update" are built from. `active`+`settings` is the coach's
+  // working draft — edited immediately as they type or toggle something.
+  // `pushed` is a snapshot of that shape taken the moment it was last sent to
+  // the screen, and it — not the draft — is what useSession actually
+  // publishes. The two start equal (the first push happens automatically
+  // when the session begins), and diverge the instant the coach edits
+  // anything, which is exactly what "dirty" below is watching for.
+  const contentOf = useCallback((src, sett) => {
+    if (!src) return { drills: [] };
     return {
-      drills: active.plan.drills || [],
-      athletes: (active.group && active.group.athletes) || [],
-      pairs: (active.group && active.group.pairs) || [],
-      notes: active.notes || "",
-      soundType: settings.soundType,
-      projection: settings.projection,
-      groupName: active.group ? active.group.name : "",
-      globalAutoNext: settings.globalAutoNext,
+      drills: src.plan.drills || [],
+      athletes: (src.group && src.group.athletes) || [],
+      pairs: (src.group && src.group.pairs) || [],
+      notes: src.notes || "",
+      soundType: sett.soundType,
+      projection: sett.projection,
+      groupName: src.group ? src.group.name : "",
+      globalAutoNext: sett.globalAutoNext,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const draftContent = useMemo(() => contentOf(active, settings), [active, settings, contentOf]);
+  const [pushed, setPushed] = useState(null);   // { active, settings } snapshot, or null
+
+  const pushedContent = useMemo(
+    () => (pushed ? contentOf(pushed.active, pushed.settings) : draftContent),
+    [pushed, contentOf, draftContent]
+  );
+
+  const dirty = pushed !== null &&
+    JSON.stringify(draftContent) !== JSON.stringify(pushedContent);
+
+  const pushToScreen = useCallback(() => {
+    setPushed({ active, settings });
   }, [active, settings]);
 
   const session = useSession({
     room: active ? room : "",
-    content,
-    options: { globalAutoNext: settings.globalAutoNext !== false },
+    content: pushedContent,
+    options: { globalAutoNext: (pushed ? pushed.settings : settings).globalAutoNext !== false },
   });
 
   useWakeLock(!!active);
@@ -103,14 +125,25 @@ export default function CoachApp() {
   const startSession = useCallback((plan, group) => {
     if (!plan) return;
     const rec = history.start({ plan, group, drills: plan.drills });
-    setActive({ plan, group, notes: "", historyId: rec.id });
+    const initial = { plan, group, notes: "", historyId: rec.id };
+    setActive(initial);
+    // Push immediately so the screen shows the opening drill the moment
+    // training starts — the coach didn't edit anything yet, so there's
+    // nothing to stage. From here on, `pushed` being non-null is what makes
+    // dirty tracking real: the next edit has something to diverge from.
+    setPushed({ active: initial, settings });
     setSessionTab("manage");
-  }, [history]);
+  }, [history, settings]);
 
   const resumeSaved = useCallback(() => {
     setActive(recoverable);
+    // Treat the recovered draft as already pushed — it's the closest thing
+    // to "what was last on the screen" this app can know after a crash, and
+    // starting dirty for no reason would put an unexplained "עדכן" prompt in
+    // front of a coach who hasn't touched anything yet.
+    setPushed({ active: recoverable, settings });
     setRecoverable(null);
-  }, [recoverable]);
+  }, [recoverable, settings]);
 
   const discardSaved = useCallback(() => {
     drop(KEYS.session);
@@ -126,29 +159,40 @@ export default function CoachApp() {
     }
     drop(KEYS.session);
     setActive(null);
+    setPushed(null);
     session.controls.restart();
     notify("האימון נשמר בהיסטוריה", "info");
   }, [active, history, session]);
 
   const setNotes = useCallback(txt => setActive(a => (a ? { ...a, notes: txt } : a)), []);
 
-  // ── projection draft/live merge ─────────────────────────────────────────
-  // "אחרי העדכון" needs a state object shaped like the live one but with the
-  // pending edits folded in — same ProjectionScreen renders both, so the coach
-  // sees precisely what pushing will change.
-  const liveState = useMemo(() => (active && session.view ? {
-    ...content,
-    drillIdx: session.view.drillIdx, phaseIdx: session.view.phaseIdx,
-    timeLeft: session.view.timeLeft, running: session.view.running,
-    totalElapsed: session.view.totalElapsed,
-  } : null), [active, session.view, content]);
+  // Reverts the working draft back to whatever is actually on the screen —
+  // the "בטל" next to "✓ עדכן את המסך".
+  const discardDraft = useCallback(() => {
+    if (!pushed) return;
+    setActive(pushed.active);
+    setSettings(pushed.settings);
+  }, [pushed]);
 
-  // Right now every control applies immediately (phase 2 has no separate
-  // "draft" queue for the clock — see CLAUDE.md); dirty stays false until a
-  // staged-edit queue is added in a later pass. The seam is here so
-  // ProjectionTab already knows how to render one.
-  const dirty = false;
-  const draftState = null;
+  // ── projection draft/live merge ─────────────────────────────────────────
+  // "אחרי העדכון" and "עכשיו על המסך" are the same shape with the clock laid
+  // on top — same ProjectionScreen renders both, so the coach sees exactly
+  // what pushing will change and nothing it won't (the clock itself is never
+  // part of the draft; play/pause/skip/± time act on the live session
+  // immediately, the way v1's protocol always treated them).
+  const withClock = useMemo(() => {
+    if (!active || !session.view) return null;
+    const v = session.view;
+    return base => ({
+      ...base,
+      drillIdx: v.drillIdx, phaseIdx: v.phaseIdx,
+      timeLeft: v.timeLeft, running: v.running,
+      totalElapsed: v.totalElapsed,
+    });
+  }, [active, session.view]);
+
+  const liveState  = useMemo(() => (withClock ? withClock(pushedContent) : null), [withClock, pushedContent]);
+  const draftState = useMemo(() => (withClock ? withClock(draftContent) : null), [withClock, draftContent]);
 
   const [pairSheet, setPairSheet] = useState(false);
 
@@ -185,7 +229,7 @@ export default function CoachApp() {
           <div style={{ flex: 1, position: "relative", overflow: "hidden" }}>
             {sessionTab === "manage" ? (
               <ManageTab
-                drills={active.plan.drills || []}
+                drills={pushedContent.drills || []}
                 view={session.view}
                 controls={session.controls}
                 notes={active.notes || ""}
@@ -203,8 +247,8 @@ export default function CoachApp() {
                 liveState={liveState}
                 draftState={draftState}
                 dirty={dirty}
-                onPush={session.republish}
-                onDiscard={() => {}}
+                onPush={pushToScreen}
+                onDiscard={discardDraft}
               />
             )}
           </div>
