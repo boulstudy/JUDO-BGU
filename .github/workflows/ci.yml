@@ -13,7 +13,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          # No `cache: npm` here: it keys the cache on a lockfile, and
+          # package-lock.json is gitignored in this repo (see .gitignore) —
+          # with cache on and no lockfile to find, setup-node fails outright
+          # before npm install even runs.
       - run: npm install --no-audit --no-fund
       - name: Unit tests
         run: node test/unit/run.js
