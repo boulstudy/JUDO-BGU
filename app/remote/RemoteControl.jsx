@@ -16,7 +16,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 
-import { supa, SEC_COLOR, fmt, getDrillPhases, totalDrillTime } from "../lib/shared";
+import { supa, supaOr, SEC_COLOR, fmt, getDrillPhases, totalDrillTime } from "../lib/shared";
+import { notifyError } from "../lib/notify";
 import { DrillForm, Toggle } from "../lib/ui";
 import { useRemoteLink } from "../lib/link";
 import { normalizeRoomCode } from "../lib/remoteBus";
@@ -139,7 +140,7 @@ export default function RemoteControl() {
 
   useEffect(() => {
     if (tab !== "workout" || library.length) return;
-    supa("drill_library?order=created_at.desc").then(r => { if (r) setLibrary(r); });
+    supaOr("drill_library?order=created_at.desc", []).then(setLibrary);
   }, [tab, library.length]);
 
   // ── derived state ─────────────────────────────────────────────────────────
@@ -497,7 +498,8 @@ function WorkoutTab({
 
   const saveToLib = async dr => {
     const p = { name:dr.name, duration_work:dr.durationWork, duration_rest:dr.durationRest||0, rounds:dr.rounds, pattern:dr.pattern, active_color:dr.activeColor||"both", note:dr.note||"" };
-    const r = await supa("drill_library", { method:"POST", body:JSON.stringify(p) });
+    const { data: r, error } = await supa("drill_library", { method:"POST", body:JSON.stringify(p) });
+    if (error) return notifyError(error, "התרגיל לא נשמר לספרייה");
     if (r && r[0]) setLibrary(prev => [r[0], ...prev]);
   };
 
@@ -584,7 +586,7 @@ function WorkoutTab({
 function MoreTab({ view, stage, workouts, setWorkouts, room, onDisconnect }) {
   const loadWorkouts = () => {
     setWorkouts([]);
-    supa("workouts?order=date.desc&limit=20").then(r => setWorkouts(r || []));
+    supaOr("workouts?order=date.desc&limit=20", []).then(setWorkouts);
   };
 
   return (

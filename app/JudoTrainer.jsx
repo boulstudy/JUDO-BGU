@@ -3,11 +3,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 import {
-  supa,
+  supa, supaOr,
   DRILL_SECTIONS, SEC_COLOR,
   fmt, getDrillPhases, totalDrillTime, drillClockSignature,
 } from "./lib/shared";
 import { DrillForm, Toggle } from "./lib/ui";
+import { notifyError } from "./lib/notify";
 import { useTvLink } from "./lib/link";
 import { makeRoomCode, normalizeRoomCode } from "./lib/remoteBus";
 import { COMMANDS, pickPatch } from "./lib/remoteProtocol";
@@ -158,7 +159,7 @@ function EditorModal({ drills, setDrills, currentIndex, judokas, setJudokas, pai
   const [newGroupName, setNewGroupName] = useState("");
 
   useEffect(() => {
-    supa("drill_library?order=created_at.desc").then(r => { if(r) setLibrary(r); });
+    supaOr("drill_library?order=created_at.desc", []).then(setLibrary);
   }, []);
 
   const blankDrill = () => ({ id:Date.now(), name:"", section:"technique", durationWork:60, durationRest:15, rounds:3, pattern:"alternate", restTiming:"after_each", activeColor:"white", type:"partner", note:"", autoNext:true });
@@ -166,7 +167,8 @@ function EditorModal({ drills, setDrills, currentIndex, judokas, setJudokas, pai
 
   const saveToLib = async (d) => {
     const p = { name:d.name, duration_work:d.durationWork, duration_rest:d.durationRest||0, rounds:d.rounds, pattern:d.pattern, active_color:d.activeColor||"both", note:d.note||"" };
-    const r = await supa("drill_library", { method:"POST", body:JSON.stringify(p) });
+    const { data: r, error } = await supa("drill_library", { method:"POST", body:JSON.stringify(p) });
+    if (error) return notifyError(error, "התרגיל לא נשמר לספרייה");
     if(r && r[0]) setLibrary(prev=>[r[0],...prev]);
   };
 
@@ -315,7 +317,7 @@ function WorkoutModal({ drills, judokas, pairs, onLoad, onClose }) {
   useEffect(() => {
     const today = new Date().toISOString().slice(0,10);
     setNewDate(today);
-    supa("workouts?order=date.desc").then(r=>{ if(r) setWorkouts(r); });
+    supaOr("workouts?order=date.desc", []).then(setWorkouts);
   }, []);
 
   const inp = {background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,107,0,0.3)",borderRadius:8,color:"#fff",padding:"8px 11px",fontFamily:"Heebo,sans-serif",fontSize:14,outline:"none"};
@@ -323,7 +325,8 @@ function WorkoutModal({ drills, judokas, pairs, onLoad, onClose }) {
   const save = async () => {
     if (!newName.trim()) return;
     setSaving(true);
-    const r = await supa("workouts", { method:"POST", body:JSON.stringify({date:newDate,name:newName,drills,judokas,pairs}) });
+    const { data: r, error } = await supa("workouts", { method:"POST", body:JSON.stringify({date:newDate,name:newName,drills,judokas,pairs}) });
+    if (error) return notifyError(error, "האימון לא נשמר");
     if(r && r[0]) setWorkouts(prev=>[r[0],...prev]);
     setSaving(false);
     setNewName("");
@@ -331,7 +334,8 @@ function WorkoutModal({ drills, judokas, pairs, onLoad, onClose }) {
 
   const update = async (id) => {
     setUpdatingId(id);
-    await supa("workouts?id=eq."+id, { method:"PATCH", body:JSON.stringify({drills,judokas,pairs}) });
+    const { error } = await supa("workouts?id=eq."+id, { method:"PATCH", body:JSON.stringify({drills,judokas,pairs}) });
+    if (error) return notifyError(error, "העדכון לא נשמר");
     setWorkouts(prev => prev.map(w => w.id===id ? {...w,drills,judokas,pairs} : w));
     setUpdatingId(null);
   };
@@ -360,7 +364,7 @@ function WorkoutModal({ drills, judokas, pairs, onLoad, onClose }) {
             </div>
             <button onClick={() => { onLoad(w); onClose(); }} style={{background:"rgba(255,107,0,0.18)",border:"none",color:"#FF6B00",borderRadius:7,padding:"6px 13px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13,fontWeight:700}}>טען</button>
             <button onClick={() => update(w.id)} style={{background:"rgba(0,229,255,0.12)",border:"1px solid rgba(0,229,255,0.25)",color:"#00e5ff",borderRadius:7,padding:"6px 13px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13,fontWeight:700}}>{updatingId===w.id?"...":"עדכן"}</button>
-            <button onClick={async () => { await supa("workouts?id=eq."+w.id,{method:"DELETE",prefer:""}); setWorkouts(workouts.filter(x=>x.id!==w.id)); }} style={{background:"none",border:"none",color:"rgba(255,60,60,0.45)",cursor:"pointer",fontSize:17}}>x</button>
+            <button onClick={async () => { const { error } = await supa("workouts?id=eq."+w.id,{method:"DELETE",prefer:""}); if (error) return notifyError(error, "המחיקה נכשלה"); setWorkouts(workouts.filter(x=>x.id!==w.id)); }} style={{background:"none",border:"none",color:"rgba(255,60,60,0.45)",cursor:"pointer",fontSize:17}}>x</button>
           </div>
         ))}
       </div>
@@ -437,14 +441,15 @@ function AttendanceModal({ judokas, onClose }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    supa("attendance?order=date.desc&limit=30").then(r => { if(r) setHistory(r); });
+    supaOr("attendance?order=date.desc&limit=30", []).then(setHistory);
   }, []);
 
   const toggle = id => setPresent(p => p.includes(id) ? p.filter(x=>x!==id) : [...p,id]);
 
   const save = async () => {
     setSaving(true);
-    const r = await supa("attendance", { method:"POST", body:JSON.stringify({ date, present_ids: present, total: present.length }) });
+    const { data: r, error } = await supa("attendance", { method:"POST", body:JSON.stringify({ date, present_ids: present, total: present.length }) });
+    if (error) return notifyError(error, "הנוכחות לא נשמרה");
     if(r && r[0]) setHistory(prev => [r[0], ...prev]);
     setSaving(false);
   };
@@ -647,7 +652,7 @@ export default function JudoTV() {
 
   // Load last workout on first open
   useEffect(() => {
-    supa("workouts?order=date.desc&limit=1").then(r => {
+    supaOr("workouts?order=date.desc&limit=1", null).then(r => {
       if (r && r[0]) {
         const w = r[0];
         if (w.drills && w.drills.length) setDrills(w.drills);

@@ -9,7 +9,7 @@
 //
 // Messages are plain JSON objects; see app/lib/remoteProtocol.js for the shapes.
 
-import { SUPA_URL, SUPA_KEY } from "./shared";
+import { SUPA_URL, SUPA_KEY } from "./supabase";
 
 const REALTIME_URL =
   SUPA_URL.replace(/^http/, "ws") + "/realtime/v1/websocket?apikey=" + SUPA_KEY + "&vsn=1.0.0";
