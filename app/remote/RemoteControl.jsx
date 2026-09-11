@@ -19,7 +19,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supa, SEC_COLOR, fmt, getDrillPhases, totalDrillTime } from "../lib/shared";
 import { DrillForm, Toggle } from "../lib/ui";
 import { useRemoteLink } from "../lib/link";
-import { normalizeRoomCode } from "../lib/remoteBus";
+import { makeRoomCode, normalizeRoomCode } from "../lib/remoteBus";
 import { COMMANDS } from "../lib/remoteProtocol";
 import { useWakeLock } from "../lib/wakeLock";
 
@@ -59,11 +59,43 @@ const btn = (bg, color, border) => ({
   touchAction: "manipulation",
 });
 
+// Persistent side rail — every tab (control / workout / settings) stays one
+// tap away regardless of what is on screen, instead of a bottom bar that can
+// end up fighting the iPhone home-indicator area mid-training.
+const TABS = [["control","🎛","שלט"],["workout","📋","מערך"],["more","⚙️","עוד"]];
+function SideMenu({ tab, setTab, room }) {
+  return (
+    <div style={{
+      width: 72, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
+      borderInlineStart: "1px solid rgba(255,255,255,0.08)", background: "rgba(0,0,0,0.45)",
+      paddingTop: "calc(12px + env(safe-area-inset-top))",
+      paddingBottom: "calc(10px + env(safe-area-inset-bottom))",
+      overflowY: "auto", overflowX: "hidden",
+    }}>
+      <span style={{color:"rgba(255,255,255,0.2)",fontFamily:"Oswald,sans-serif",fontSize:12,letterSpacing:1,marginBottom:16}}>{room}</span>
+      {TABS.map(([k, icon, label]) => (
+        <button key={k} onClick={() => setTab(k)} style={{
+          width: "100%", background: tab === k ? "rgba(255,107,0,0.14)" : "none",
+          border: "none", borderInlineStart: "3px solid " + (tab === k ? ORANGE : "transparent"),
+          color: tab === k ? ORANGE : "rgba(255,255,255,0.45)",
+          padding: "12px 2px", cursor: "pointer", fontSize: 11, fontWeight: 700,
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+          WebkitTapHighlightColor: "transparent", touchAction: "manipulation",
+        }}>
+          <span style={{fontSize:20}}>{icon}</span>{label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function RemoteControl() {
   // ── link ──────────────────────────────────────────────────────────────────
-  const [room, setRoom]           = useState("");
-  const [bootstrapped, setBoot]   = useState(false);
-  const [codeInput, setCodeInput] = useState("");
+  // The code is created here, on the phone, and typed into the TV — not the
+  // other way around — so there is always a code as soon as the page loads.
+  const [room, setRoom]                   = useState("");
+  const [bootstrapped, setBoot]           = useState(false);
+  const [pairingDismissed, setPairingDismissed] = useState(false);
 
   const [live,  setLive]  = useState(null);   // { rev, s, sAt, d }
   const [draft, setDraft] = useState(null);   // sparse — only what the coach touched
@@ -98,8 +130,12 @@ export default function RemoteControl() {
     try {
       const params = new URLSearchParams(window.location.search);
       code = normalizeRoomCode(params.get("code") || window.localStorage.getItem("judo_remote_room") || "");
-    } catch(e) {}
-    if (code.length >= 4) setRoom(code);
+      if (code.length < 4) {
+        code = makeRoomCode(4);
+        window.localStorage.setItem("judo_remote_room", code);
+      }
+    } catch(e) { code = makeRoomCode(4); }
+    setRoom(code);
     setBoot(true);
   }, []);
 
@@ -130,6 +166,13 @@ export default function RemoteControl() {
   useEffect(() => {
     if (!room) { setLive(null); setDraft(null); revRef.current = 0; }
   }, [room]);
+
+  // Once the TV shows up, the code has done its job — move on to the controls.
+  useEffect(() => {
+    if (!link.tvConnected) return;
+    const id = setTimeout(() => setPairingDismissed(true), 1200);
+    return () => clearTimeout(id);
+  }, [link.tvConnected]);
 
   useEffect(() => {
     if (!toast) return;
@@ -231,25 +274,26 @@ export default function RemoteControl() {
     stage(patch);
   };
 
-  const disconnect = () => {
-    try { window.localStorage.removeItem("judo_remote_room"); } catch(e) {}
-    setRoom("");
-    setCodeInput("");
-  };
-
-  const connect = () => {
-    const code = normalizeRoomCode(codeInput);
-    if (code.length < 4) return;
+  // Makes a fresh code and shows the pairing screen again — the TV needs it
+  // typed in again, so any remote it already had is effectively kicked off.
+  const newCode = () => {
+    const code = makeRoomCode(4);
     try { window.localStorage.setItem("judo_remote_room", code); } catch(e) {}
+    setLive(null); setDraft(null); revRef.current = 0;
     setRoom(code);
+    setPairingDismissed(false);
   };
 
   // ── screens ───────────────────────────────────────────────────────────────
+  // touchAction/overscrollBehaviorX here (plus the matching html/body rules in
+  // the injected <style>) are what stop iOS from letting the page pan sideways —
+  // it should only ever be possible to scroll up and down.
   const shell = children => (
-    <div style={{height:"100vh",maxHeight:"100dvh",overflow:"hidden",background:"#080a10",direction:"rtl",fontFamily:"Heebo,sans-serif",color:"#fff",display:"flex",flexDirection:"column"}}>
+    <div style={{height:"100vh",maxHeight:"100dvh",width:"100%",maxWidth:"100vw",overflow:"hidden",overflowX:"hidden",touchAction:"pan-y",overscrollBehaviorX:"none",background:"#080a10",direction:"rtl",fontFamily:"Heebo,sans-serif",color:"#fff",display:"flex",flexDirection:"column"}}>
       <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&family=Oswald:wght@700&display=swap" rel="stylesheet"/>
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0}
+        html,body{overflow-x:hidden;overscroll-behavior-x:none;touch-action:pan-y;width:100%}
         button{font-family:Heebo,sans-serif}
         input,textarea,select{font-family:Heebo,sans-serif}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
@@ -260,36 +304,36 @@ export default function RemoteControl() {
 
   if (!bootstrapped) return shell(null);
 
-  if (!room) {
+  if (!pairingDismissed) {
+    const pairStatusLabel = link.tvConnected ? "מחובר! עובר לשלט…"
+      : link.status === "online" ? "ממתין שהקוד יוקלד בטלויזיה…"
+      : link.status === "connecting" ? "מתחבר…"
+      : "אין חיבור לרשת";
+    const pairStatusColor = link.tvConnected ? "#2ecc71"
+      : link.status === "offline" ? "#ff4444" : "#ffb347";
     return shell(
-      <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"center",padding:26,gap:22}}>
+      <div style={{flex:1,display:"flex",flexDirection:"column",justifyContent:"center",padding:26,gap:22,overflowY:"auto"}}>
         <div style={{textAlign:"center"}}>
           <div style={{fontSize:44,marginBottom:10}}>🥋</div>
           <div style={{fontSize:24,fontWeight:900}}>שלט אימון</div>
           <div style={{color:"rgba(255,255,255,0.35)",fontSize:14,marginTop:6}}>נבחרת ג׳ודו BGU</div>
         </div>
-        <div style={{...card,padding:20}}>
-          <div style={{color:"rgba(255,255,255,0.45)",fontSize:13,marginBottom:12,textAlign:"center"}}>
-            הקלידו את הקוד שמופיע במסך הטלויזיה
+        <div style={{...card,padding:20,textAlign:"center"}}>
+          <div style={{color:"rgba(255,255,255,0.45)",fontSize:13,marginBottom:14}}>
+            הקלידו את הקוד הזה במסך הטלויזיה
           </div>
-          <input
-            value={codeInput}
-            onChange={e => setCodeInput(normalizeRoomCode(e.target.value))}
-            onKeyDown={e => { if (e.key === "Enter") connect(); }}
-            placeholder="A7K2"
-            autoCapitalize="characters"
-            autoCorrect="off"
-            spellCheck={false}
-            style={{width:"100%",background:"rgba(0,0,0,0.35)",border:"1px solid rgba(255,107,0,0.4)",borderRadius:12,color:"#fff",padding:"16px",fontFamily:"Oswald,sans-serif",fontSize:38,letterSpacing:12,textAlign:"center",outline:"none"}}
-          />
-          <button
-            onClick={connect}
-            disabled={normalizeRoomCode(codeInput).length < 4}
-            style={{...btn(normalizeRoomCode(codeInput).length < 4 ? "rgba(255,255,255,0.05)" : "linear-gradient(135deg,#FF6B00,#cc4400)", "#fff", "none"),width:"100%",marginTop:14,padding:"16px",fontSize:18,fontWeight:900,opacity:normalizeRoomCode(codeInput).length < 4 ? 0.4 : 1}}
-          >התחבר</button>
+          <div style={{fontFamily:"Oswald,sans-serif",fontSize:52,letterSpacing:14,color:"#FF6B00",direction:"ltr"}}>{room || "····"}</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:16}}>
+            <span style={{width:8,height:8,borderRadius:"50%",background:pairStatusColor,flexShrink:0,animation:link.tvConnected?"none":"pulse 1.2s infinite"}}/>
+            <span style={{color:pairStatusColor,fontSize:13,fontWeight:700}}>{pairStatusLabel}</span>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:10,justifyContent:"center"}}>
+          <button onClick={newCode} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:13,textDecoration:"underline"}}>🔄 קוד חדש</button>
+          <button onClick={() => setPairingDismissed(true)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:13,textDecoration:"underline"}}>המשך בלי לחכות ←</button>
         </div>
         <div style={{color:"rgba(255,255,255,0.25)",fontSize:12,textAlign:"center",lineHeight:1.8}}>
-          במסך הטלויזיה לוחצים על <span style={{color:"rgba(255,255,255,0.45)"}}>📱 שלט רחוק</span><br/>והקוד נפתח שם בחלון
+          במסך הטלויזיה לוחצים על <span style={{color:"rgba(255,255,255,0.45)"}}>📱 חבר שלט</span><br/>ומקלידים שם את הקוד שלמעלה
         </div>
       </div>
     );
@@ -304,83 +348,82 @@ export default function RemoteControl() {
 
   return shell(
     <>
-      {/* header */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"10px 14px",borderBottom:"1px solid rgba(255,255,255,0.07)",background:"rgba(0,0,0,0.4)",position:"sticky",top:0,zIndex:20}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
-          <span style={{width:8,height:8,borderRadius:"50%",background:connColor,flexShrink:0,animation:link.tvConnected?"none":"pulse 1.2s infinite"}}/>
-          <span style={{color:"rgba(255,255,255,0.5)",fontSize:12,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{connLabel}</span>
-          <span style={{color:"rgba(255,255,255,0.22)",fontFamily:"Oswald,sans-serif",fontSize:14,letterSpacing:2}}>{room}</span>
-        </div>
-        <div
-          onClick={() => setLiveMode(v => !v)}
-          style={{display:"flex",alignItems:"center",gap:7,background:liveMode?"rgba(255,68,68,0.14)":"rgba(255,255,255,0.05)",border:"1px solid "+(liveMode?"rgba(255,68,68,0.45)":"rgba(255,255,255,0.1)"),borderRadius:20,padding:"6px 12px",cursor:"pointer",flexShrink:0}}>
-          <span style={{fontSize:13,color:liveMode?"#ff6060":"rgba(255,255,255,0.6)",fontWeight:700,whiteSpace:"nowrap"}}>
-            {liveMode ? "🔴 שידור ישיר" : "🔒 מצב פרטי"}
-          </span>
-        </div>
-      </div>
-
-      {!synced && (
-        <div style={{padding:"10px 14px",background:"rgba(255,179,71,0.1)",color:"#ffb347",fontSize:13,textAlign:"center"}}>
-          מסתנכרן עם המסך…
-        </div>
-      )}
-
-      {/* body */}
-      <div style={{flex:1,overflowY:"auto",padding:"14px 14px 8px",display:"flex",flexDirection:"column",gap:12}}>
-        {tab === "control" && (
-          <ControlTab
-            running={running} liveTime={liveTime} shownTime={shownTime} stagedTime={stagedTime}
-            liveDrill={liveDrill} livePhase={livePhase} livePhases={livePhases} livePhaseIdx={base.phaseIdx}
-            viewDrill={viewDrill} viewPhase={viewPhase} isDirty={isDirty} liveMode={liveMode}
-            drillIdx={view.drillIdx} drillCount={view.drills.length}
-            onAdjust={adjustTime} onReset={onReset} onPrev={() => goDrill(view.drillIdx - 1)}
-            onNextPhase={onNextPhase} onPlayPause={onPlayPause}
-          />
-        )}
-
-        {tab === "workout" && (
-          <WorkoutTab
-            drills={view.drills} currentIdx={view.drillIdx} liveIdx={base.drillIdx}
-            onPick={goDrill} setDrills={setDrills}
-            editId={editId} setEditId={setEditId} editData={editData} setEditData={setEditData}
-            newDrill={newDrill} setNewDrill={setNewDrill}
-            library={library} setLibrary={setLibrary} showLib={showLib} setShowLib={setShowLib}
-          />
-        )}
-
-        {tab === "more" && (
-          <MoreTab
-            view={view} stage={stage} workouts={workouts} setWorkouts={setWorkouts}
-            room={room} onDisconnect={disconnect}
-          />
-        )}
-      </div>
-
-      {/* pending changes */}
-      {isDirty && (
-        <div style={{padding:"10px 14px",borderTop:"1px solid rgba(255,107,0,0.3)",background:"rgba(255,107,0,0.09)",position:"sticky",bottom:0,zIndex:15}}>
-          <div style={{color:"rgba(255,255,255,0.55)",fontSize:12,marginBottom:8}}>
-            לא נשלח למסך: {dirtyKeys.map(k => PATCH_LABELS[k] || k).join(" · ")}
+      {/* everything left of the side menu: header, synced state, active tab, pending changes */}
+      <div style={{flex:1,minWidth:0,minHeight:0,display:"flex",flexDirection:"row",overflow:"hidden"}}>
+        <div style={{flex:1,minWidth:0,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          {/* header */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,padding:"10px 14px",borderBottom:"1px solid rgba(255,255,255,0.07)",background:"rgba(0,0,0,0.4)",flexShrink:0}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,minWidth:0}}>
+              <span style={{width:8,height:8,borderRadius:"50%",background:connColor,flexShrink:0,animation:link.tvConnected?"none":"pulse 1.2s infinite"}}/>
+              <span style={{color:"rgba(255,255,255,0.5)",fontSize:12,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{connLabel}</span>
+            </div>
+            <div
+              onClick={() => setLiveMode(v => !v)}
+              style={{display:"flex",alignItems:"center",gap:7,background:liveMode?"rgba(255,68,68,0.14)":"rgba(255,255,255,0.05)",border:"1px solid "+(liveMode?"rgba(255,68,68,0.45)":"rgba(255,255,255,0.1)"),borderRadius:20,padding:"6px 12px",cursor:"pointer",flexShrink:0}}>
+              <span style={{fontSize:13,color:liveMode?"#ff6060":"rgba(255,255,255,0.6)",fontWeight:700,whiteSpace:"nowrap"}}>
+                {liveMode ? "🔴 שידור ישיר" : "🔒 מצב פרטי"}
+              </span>
+            </div>
           </div>
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={() => setDraft(null)} style={{...btn("rgba(255,255,255,0.06)","rgba(255,255,255,0.55)"),flex:1}}>בטל</button>
-            <button onClick={() => pushDraft(null)} style={{...btn("linear-gradient(135deg,#FF6B00,#cc4400)","#fff","none"),flex:2,fontWeight:900,fontSize:16}}>✓ עדכן טלויזיה</button>
-          </div>
-        </div>
-      )}
 
-      {/* tabs */}
-      <div style={{display:"flex",borderTop:"1px solid rgba(255,255,255,0.08)",background:"rgba(0,0,0,0.45)",paddingBottom:"env(safe-area-inset-bottom)"}}>
-        {[["control","🎛","שלט"],["workout","📋","מערך"],["more","⚙️","עוד"]].map(([k,icon,label]) => (
-          <button key={k} onClick={() => setTab(k)} style={{flex:1,background:"none",border:"none",borderTop:"2px solid "+(tab===k?ORANGE:"transparent"),color:tab===k?ORANGE:"rgba(255,255,255,0.4)",padding:"11px 0 13px",cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
-            <span style={{fontSize:19}}>{icon}</span>{label}
-          </button>
-        ))}
+          {!synced && (
+            <div style={{padding:"10px 14px",background:"rgba(255,179,71,0.1)",color:"#ffb347",fontSize:13,textAlign:"center",flexShrink:0}}>
+              מסתנכרן עם המסך…
+            </div>
+          )}
+
+          {/* body */}
+          <div style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"14px 14px 8px",display:"flex",flexDirection:"column",gap:12}}>
+            {tab === "control" && (
+              <ControlTab
+                running={running} liveTime={liveTime} shownTime={shownTime} stagedTime={stagedTime}
+                liveDrill={liveDrill} livePhase={livePhase} livePhases={livePhases} livePhaseIdx={base.phaseIdx}
+                viewDrill={viewDrill} viewPhase={viewPhase} isDirty={isDirty} liveMode={liveMode}
+                drillIdx={view.drillIdx} drillCount={view.drills.length}
+                onAdjust={adjustTime} onReset={onReset} onPrev={() => goDrill(view.drillIdx - 1)}
+                onNextPhase={onNextPhase} onPlayPause={onPlayPause}
+              />
+            )}
+
+            {tab === "workout" && (
+              <WorkoutTab
+                drills={view.drills} currentIdx={view.drillIdx} liveIdx={base.drillIdx}
+                onPick={goDrill} setDrills={setDrills}
+                editId={editId} setEditId={setEditId} editData={editData} setEditData={setEditData}
+                newDrill={newDrill} setNewDrill={setNewDrill}
+                library={library} setLibrary={setLibrary} showLib={showLib} setShowLib={setShowLib}
+              />
+            )}
+
+            {tab === "more" && (
+              <MoreTab
+                view={view} stage={stage} workouts={workouts} setWorkouts={setWorkouts}
+                room={room} onDisconnect={newCode}
+              />
+            )}
+          </div>
+
+          {/* pending changes */}
+          {isDirty && (
+            <div style={{padding:"10px 14px",borderTop:"1px solid rgba(255,107,0,0.3)",background:"rgba(255,107,0,0.09)",flexShrink:0}}>
+              <div style={{color:"rgba(255,255,255,0.55)",fontSize:12,marginBottom:8}}>
+                לא נשלח למסך: {dirtyKeys.map(k => PATCH_LABELS[k] || k).join(" · ")}
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={() => setDraft(null)} style={{...btn("rgba(255,255,255,0.06)","rgba(255,255,255,0.55)"),flex:1}}>בטל</button>
+                <button onClick={() => pushDraft(null)} style={{...btn("linear-gradient(135deg,#FF6B00,#cc4400)","#fff","none"),flex:2,fontWeight:900,fontSize:16}}>✓ עדכן טלויזיה</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* side menu — always visible, so every tab (control / workout / settings)
+            stays one tap away no matter what is on screen mid-training. */}
+        <SideMenu tab={tab} setTab={setTab} room={room}/>
       </div>
 
       {toast && (
-        <div style={{position:"fixed",bottom:96,left:"50%",transform:"translateX(-50%)",background:"rgba(46,204,113,0.95)",color:"#06210f",borderRadius:22,padding:"11px 22px",fontWeight:900,fontSize:15,zIndex:60,whiteSpace:"nowrap"}}>
+        <div style={{position:"fixed",bottom:"calc(24px + env(safe-area-inset-bottom))",left:"50%",transform:"translateX(-50%)",background:"rgba(46,204,113,0.95)",color:"#06210f",borderRadius:22,padding:"11px 22px",fontWeight:900,fontSize:15,zIndex:60,whiteSpace:"nowrap",maxWidth:"calc(100vw - 32px)",overflow:"hidden",textOverflow:"ellipsis"}}>
           ✓ {toast}
         </div>
       )}
@@ -664,7 +707,7 @@ function MoreTab({ view, stage, workouts, setWorkouts, room, onDisconnect }) {
             <div style={{color:"rgba(255,255,255,0.3)",fontSize:11,letterSpacing:3}}>קוד חיבור</div>
             <div style={{fontFamily:"Oswald,sans-serif",fontSize:26,letterSpacing:6,marginTop:3}}>{room}</div>
           </div>
-          <button onClick={onDisconnect} style={{...btn("rgba(255,60,60,0.1)","#ff6060"),padding:"11px 16px",fontSize:14}}>התנתק</button>
+          <button onClick={onDisconnect} style={{...btn("rgba(255,60,60,0.1)","#ff6060"),padding:"11px 16px",fontSize:14}}>קוד חדש</button>
         </div>
       </div>
     </>

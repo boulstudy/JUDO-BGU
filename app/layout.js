@@ -18,7 +18,7 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen" />
       </head>
-      <body style={{ margin: 0, padding: 0, background: '#080a10' }}>
+      <body style={{ margin: 0, padding: 0, background: '#080a10', overflowX: 'hidden', maxWidth: '100vw' }}>
         {children}
       </body>
     </html>
