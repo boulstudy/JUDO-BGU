@@ -49,6 +49,10 @@ export default function Home() {
           <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', textAlign: 'center' }}>השלט הפרטי — כאן על הנייד</span>
         </a>
       </div>
+
+      <a href="/clubs" style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13, fontFamily: 'Heebo,sans-serif', textDecoration: 'none' }}>
+        🗂️ ניהול מועדונים (בטא)
+      </a>
     </div>
   );
 }
