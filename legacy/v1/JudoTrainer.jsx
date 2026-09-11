@@ -3,14 +3,16 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 import {
-  supa,
+  supa, supaOr,
   DRILL_SECTIONS, SEC_COLOR,
   fmt, getDrillPhases, totalDrillTime, drillClockSignature,
 } from "./lib/shared";
 import { DrillForm, Toggle } from "./lib/ui";
-import { useTvLink } from "./lib/link";
+import { useSound } from "./lib/useSound";
+import { notifyError } from "./lib/notify";
+import { useTvLink } from "./lib/linkV1";
 import { makeRoomCode, normalizeRoomCode } from "./lib/remoteBus";
-import { COMMANDS, pickPatch } from "./lib/remoteProtocol";
+import { COMMANDS, pickPatch } from "./lib/remoteProtocolV1";
 
 const INIT_JUDOKAS = [
   { id:1, name:"יואב כ׳",  color:"white", personalDrills:[{id:101,name:"נאגה גדן שמאל",duration:180},{id:102,name:"אוצ׳י גארי",duration:120}]},
@@ -29,120 +31,6 @@ const INIT_DRILLS = [
   { id:5, name:"עבודה אישית",   section:"mixed",     durationWork:300, durationRest:0,  rounds:1, pattern:"together",  restTiming:"none",        activeColor:"both",  type:"personal", note:"כל אחד על התרגיל שלו",    autoNext:false },
 ];
 
-// ── Sound — Flex Timer / GymNext style (client-only) ─────────────────────────
-// soundType: "beep" | "buzz" | "mute"
-function useSound(soundType) {
-  const ctxRef = useRef(null);
-
-  // Must be called directly inside a user gesture (tap/click) to work on iOS
-  const initCtx = useCallback(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      if (!ctxRef.current) {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (!AC) return null;
-        ctxRef.current = new AC();
-      }
-      if (ctxRef.current.state === "suspended") {
-        ctxRef.current.resume();
-      }
-      return ctxRef.current;
-    } catch(e) { return null; }
-  }, []);
-
-  const getCtx = useCallback(() => {
-    if (!ctxRef.current) return null;
-    if (ctxRef.current.state === "suspended") ctxRef.current.resume();
-    return ctxRef.current;
-  }, []);
-
-  // Sharp electronic beep — Flex Timer style
-  // Uses sine + slight distortion via gain clipping for that crisp gym-timer sound
-  const playBeep = useCallback((freq, dur, vol, offset) => {
-    try {
-      const ctx = getCtx();
-      if (!ctx) return;
-      const t = ctx.currentTime + (offset || 0);
-
-      // Primary tone
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.type = "sine";
-      osc.frequency.value = freq;
-      // Hard attack, flat sustain, fast release — gym timer character
-      gain.gain.setValueAtTime(0, t);
-      gain.gain.linearRampToValueAtTime(vol, t + 0.004);
-      gain.gain.setValueAtTime(vol, t + dur - 0.015);
-      gain.gain.linearRampToValueAtTime(0, t + dur);
-      osc.start(t); osc.stop(t + dur + 0.02);
-
-      // Click transient at attack — makes it feel punchy
-      const click = ctx.createOscillator();
-      const clickGain = ctx.createGain();
-      click.connect(clickGain); clickGain.connect(ctx.destination);
-      click.type = "square";
-      click.frequency.value = freq * 1.5;
-      clickGain.gain.setValueAtTime(vol * 0.25, t);
-      clickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.018);
-      click.start(t); click.stop(t + 0.02);
-    } catch(e) {}
-  }, [getCtx]);
-
-  // Buzz — lower, more aggressive sound for rest end
-  const playBuzz = useCallback((freq, dur, vol, offset) => {
-    try {
-      const ctx = getCtx();
-      if (!ctx) return;
-      const t = ctx.currentTime + (offset || 0);
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.type = "sawtooth";
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0, t);
-      gain.gain.linearRampToValueAtTime(vol, t + 0.005);
-      gain.gain.setValueAtTime(vol, t + dur - 0.02);
-      gain.gain.linearRampToValueAtTime(0, t + dur);
-      osc.start(t); osc.stop(t + dur + 0.02);
-    } catch(e) {}
-  }, [getCtx]);
-
-  // Interval-Timer style countdown: 3 short sharp beeps at t=3,2,1
-  const tickBeep = useCallback((t) => {
-    if (soundType === "mute") return;
-    if (soundType === "buzz") {
-      playBuzz(180, 0.08, 0.3, 0);
-    } else {
-      playBeep(1000, 0.09, 0.5, 0);
-    }
-  }, [soundType, playBeep, playBuzz]);
-
-  // Start-of-time signal — one long beep
-  const startBeep = useCallback(() => {
-    if (soundType === "mute") return;
-    if (soundType === "buzz") {
-      playBuzz(150, 0.7, 0.5, 0);
-    } else {
-      playBeep(800, 0.75, 0.65, 0);
-    }
-  }, [soundType, playBeep, playBuzz]);
-
-  // End-of-time signal — two short beeps fired together, right after the 3 countdown beeps
-  const endBeep = useCallback(() => {
-    if (soundType === "mute") return;
-    if (soundType === "buzz") {
-      playBuzz(180, 0.08, 0.3, 0);
-      playBuzz(180, 0.32, 0.3, 0.16);
-    } else {
-      playBeep(1000, 0.09, 0.5, 0);
-      playBeep(1000, 0.32, 0.5, 0.16);
-    }
-  }, [soundType, playBeep, playBuzz]);
-
-  return { tickBeep, endBeep, startBeep, initCtx };
-}
-
 // ── Editor Modal ──────────────────────────────────────────────────────────────
 function EditorModal({ drills, setDrills, currentIndex, judokas, setJudokas, pairs, setPairs, onClose }) {
   const [list, setList] = useState(drills.map(d => ({...d})));
@@ -158,7 +46,7 @@ function EditorModal({ drills, setDrills, currentIndex, judokas, setJudokas, pai
   const [newGroupName, setNewGroupName] = useState("");
 
   useEffect(() => {
-    supa("drill_library?order=created_at.desc").then(r => { if(r) setLibrary(r); });
+    supaOr("drill_library?order=created_at.desc", []).then(setLibrary);
   }, []);
 
   const blankDrill = () => ({ id:Date.now(), name:"", section:"technique", durationWork:60, durationRest:15, rounds:3, pattern:"alternate", restTiming:"after_each", activeColor:"white", type:"partner", note:"", autoNext:true });
@@ -166,7 +54,8 @@ function EditorModal({ drills, setDrills, currentIndex, judokas, setJudokas, pai
 
   const saveToLib = async (d) => {
     const p = { name:d.name, duration_work:d.durationWork, duration_rest:d.durationRest||0, rounds:d.rounds, pattern:d.pattern, active_color:d.activeColor||"both", note:d.note||"" };
-    const r = await supa("drill_library", { method:"POST", body:JSON.stringify(p) });
+    const { data: r, error } = await supa("drill_library", { method:"POST", body:JSON.stringify(p) });
+    if (error) return notifyError(error, "התרגיל לא נשמר לספרייה");
     if(r && r[0]) setLibrary(prev=>[r[0],...prev]);
   };
 
@@ -315,7 +204,7 @@ function WorkoutModal({ drills, judokas, pairs, onLoad, onClose }) {
   useEffect(() => {
     const today = new Date().toISOString().slice(0,10);
     setNewDate(today);
-    supa("workouts?order=date.desc").then(r=>{ if(r) setWorkouts(r); });
+    supaOr("workouts?order=date.desc", []).then(setWorkouts);
   }, []);
 
   const inp = {background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,107,0,0.3)",borderRadius:8,color:"#fff",padding:"8px 11px",fontFamily:"Heebo,sans-serif",fontSize:14,outline:"none"};
@@ -323,7 +212,8 @@ function WorkoutModal({ drills, judokas, pairs, onLoad, onClose }) {
   const save = async () => {
     if (!newName.trim()) return;
     setSaving(true);
-    const r = await supa("workouts", { method:"POST", body:JSON.stringify({date:newDate,name:newName,drills,judokas,pairs}) });
+    const { data: r, error } = await supa("workouts", { method:"POST", body:JSON.stringify({date:newDate,name:newName,drills,judokas,pairs}) });
+    if (error) return notifyError(error, "האימון לא נשמר");
     if(r && r[0]) setWorkouts(prev=>[r[0],...prev]);
     setSaving(false);
     setNewName("");
@@ -331,7 +221,8 @@ function WorkoutModal({ drills, judokas, pairs, onLoad, onClose }) {
 
   const update = async (id) => {
     setUpdatingId(id);
-    await supa("workouts?id=eq."+id, { method:"PATCH", body:JSON.stringify({drills,judokas,pairs}) });
+    const { error } = await supa("workouts?id=eq."+id, { method:"PATCH", body:JSON.stringify({drills,judokas,pairs}) });
+    if (error) return notifyError(error, "העדכון לא נשמר");
     setWorkouts(prev => prev.map(w => w.id===id ? {...w,drills,judokas,pairs} : w));
     setUpdatingId(null);
   };
@@ -360,7 +251,7 @@ function WorkoutModal({ drills, judokas, pairs, onLoad, onClose }) {
             </div>
             <button onClick={() => { onLoad(w); onClose(); }} style={{background:"rgba(255,107,0,0.18)",border:"none",color:"#FF6B00",borderRadius:7,padding:"6px 13px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13,fontWeight:700}}>טען</button>
             <button onClick={() => update(w.id)} style={{background:"rgba(0,229,255,0.12)",border:"1px solid rgba(0,229,255,0.25)",color:"#00e5ff",borderRadius:7,padding:"6px 13px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13,fontWeight:700}}>{updatingId===w.id?"...":"עדכן"}</button>
-            <button onClick={async () => { await supa("workouts?id=eq."+w.id,{method:"DELETE",prefer:""}); setWorkouts(workouts.filter(x=>x.id!==w.id)); }} style={{background:"none",border:"none",color:"rgba(255,60,60,0.45)",cursor:"pointer",fontSize:17}}>x</button>
+            <button onClick={async () => { const { error } = await supa("workouts?id=eq."+w.id,{method:"DELETE",prefer:""}); if (error) return notifyError(error, "המחיקה נכשלה"); setWorkouts(workouts.filter(x=>x.id!==w.id)); }} style={{background:"none",border:"none",color:"rgba(255,60,60,0.45)",cursor:"pointer",fontSize:17}}>x</button>
           </div>
         ))}
       </div>
@@ -437,14 +328,15 @@ function AttendanceModal({ judokas, onClose }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    supa("attendance?order=date.desc&limit=30").then(r => { if(r) setHistory(r); });
+    supaOr("attendance?order=date.desc&limit=30", []).then(setHistory);
   }, []);
 
   const toggle = id => setPresent(p => p.includes(id) ? p.filter(x=>x!==id) : [...p,id]);
 
   const save = async () => {
     setSaving(true);
-    const r = await supa("attendance", { method:"POST", body:JSON.stringify({ date, present_ids: present, total: present.length }) });
+    const { data: r, error } = await supa("attendance", { method:"POST", body:JSON.stringify({ date, present_ids: present, total: present.length }) });
+    if (error) return notifyError(error, "הנוכחות לא נשמרה");
     if(r && r[0]) setHistory(prev => [r[0], ...prev]);
     setSaving(false);
   };
@@ -647,7 +539,7 @@ export default function JudoTV() {
 
   // Load last workout on first open
   useEffect(() => {
-    supa("workouts?order=date.desc&limit=1").then(r => {
+    supaOr("workouts?order=date.desc&limit=1", null).then(r => {
       if (r && r[0]) {
         const w = r[0];
         if (w.drills && w.drills.length) setDrills(w.drills);

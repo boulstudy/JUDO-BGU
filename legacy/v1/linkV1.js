@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createBus } from "./remoteBus";
-import { TICK_IDLE_MS, PING_MS, PEER_TIMEOUT_MS } from "./remoteProtocol";
+import { TICK_IDLE_MS, PING_MS, PEER_TIMEOUT_MS } from "./remoteProtocolV1";
 
 // Re-renders every `ms` so "is the peer still there?" stays honest.
 function useClock(ms) {
