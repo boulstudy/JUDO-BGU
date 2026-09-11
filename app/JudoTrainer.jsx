@@ -9,7 +9,7 @@ import {
 } from "./lib/shared";
 import { DrillForm, Toggle } from "./lib/ui";
 import { useTvLink } from "./lib/link";
-import { makeRoomCode, normalizeRoomCode } from "./lib/remoteBus";
+import { normalizeRoomCode } from "./lib/remoteBus";
 import { COMMANDS, pickPatch } from "./lib/remoteProtocol";
 
 const INIT_JUDOKAS = [
@@ -499,15 +499,15 @@ function AttendanceModal({ judokas, onClose }) {
 }
 
 // ── Remote pairing ────────────────────────────────────────────────────────────
-// The code lives here and nowhere else. It is deliberately not on the always-on
-// display, so nobody can memorise it off the projection and join mid-training.
-function RemotePairingModal({ roomCode, remoteOn, setRemoteOn, onNewCode, status, connected, onClose }) {
+// The code is created on the phone (app/remote) and typed in here. This modal
+// is where the coach enters it — it never invents a code of its own.
+function RemotePairingModal({ roomCode, remoteOn, setRemoteOn, onApplyCode, onClearCode, status, connected, onClose }) {
+  const [codeInput, setCodeInput] = useState("");
   const [origin, setOrigin] = useState("");
-  const [copied, setCopied] = useState("");
 
   useEffect(() => { try { setOrigin(window.location.origin); } catch(e) {} }, []);
 
-  // Once a remote is on the line the code has done its job — get it off screen.
+  // Once the phone is on the line, this modal has done its job — get it off screen.
   // onClose is a fresh closure on every render of the TV, so it is held in a ref;
   // depending on it directly would restart the timeout before it ever fires.
   const closeRef = useRef(onClose);
@@ -518,34 +518,13 @@ function RemotePairingModal({ roomCode, remoteOn, setRemoteOn, onNewCode, status
     return () => clearTimeout(id);
   }, [connected]);
 
-  const remoteUrl = (origin || "") + "/remote";
-  const pairUrl   = remoteUrl + (roomCode ? "?code=" + roomCode : "");
-
-  const copy = (text, what) => {
-    const done = () => { setCopied(what); setTimeout(() => setCopied(""), 1800); };
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done, () => {});
-        return;
-      }
-    } catch(e) {}
-    try {
-      const ta = document.createElement("textarea");
-      ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
-      document.body.appendChild(ta); ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-      done();
-    } catch(e) {}
-  };
-
   const statusLabel = connected ? "השלט התחבר — סוגר"
-    : status === "online" ? "ממתין לשלט…"
+    : status === "online" ? "ממתין שהקוד יוקלד בנייד…"
     : status === "connecting" ? "מתחבר…"
     : "אין חיבור לשרת";
   const statusColor = connected ? "#2ecc71" : status === "online" ? "#ffb347" : "#ff4444";
 
-  const linkBtn = {background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",color:"rgba(255,255,255,0.65)",borderRadius:10,padding:"11px 12px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13,fontWeight:700,flex:1};
+  const submit = () => { if (normalizeRoomCode(codeInput).length >= 4) onApplyCode(codeInput); };
 
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
@@ -555,51 +534,49 @@ function RemotePairingModal({ roomCode, remoteOn, setRemoteOn, onNewCode, status
           <button onClick={onClose} style={{background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:22}}>✕</button>
         </div>
 
-        <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:16}}>
-          <span style={{width:9,height:9,borderRadius:"50%",background:statusColor}}/>
-          <span style={{color:statusColor,fontSize:14,fontWeight:700}}>{statusLabel}</span>
-        </div>
-
-        <div style={{background:"rgba(255,107,0,0.07)",border:"1px solid rgba(255,107,0,0.3)",borderRadius:14,padding:"18px",textAlign:"center",marginBottom:8}}>
-          <div style={{color:"rgba(255,255,255,0.35)",fontSize:12,letterSpacing:3,marginBottom:8}}>קוד חיבור</div>
-          <div style={{color:"#FF6B00",fontFamily:"Oswald,sans-serif",fontSize:56,letterSpacing:14,lineHeight:1}}>{roomCode || "····"}</div>
-        </div>
-        <div style={{color:"rgba(255,255,255,0.28)",fontSize:12,textAlign:"center",marginBottom:16}}>
-          הקוד מוצג רק בחלון הזה — לא על המסך המוקרן
-        </div>
-
-        {/* the separate way in, for the phone */}
-        <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"14px 15px",marginBottom:14}}>
-          <div style={{color:"rgba(255,255,255,0.35)",fontSize:11,letterSpacing:3,marginBottom:9}}>ממשק הנייד</div>
-          <a href={remoteUrl} target="_blank" rel="noopener noreferrer"
-             style={{color:"#6ec6ff",fontFamily:"monospace",fontSize:14,wordBreak:"break-all",display:"block",marginBottom:12}}>
-            {remoteUrl || "/remote"}
-          </a>
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={() => copy(pairUrl, "link")} style={linkBtn}>
-              {copied === "link" ? "✓ הועתק" : "🔗 העתק קישור עם הקוד"}
-            </button>
-            <button onClick={() => copy(roomCode, "code")} style={{...linkBtn,flex:0,minWidth:110}}>
-              {copied === "code" ? "✓ הועתק" : "📋 העתק קוד"}
-            </button>
+        {roomCode && (
+          <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:16}}>
+            <span style={{width:9,height:9,borderRadius:"50%",background:statusColor}}/>
+            <span style={{color:statusColor,fontSize:14,fontWeight:700}}>{statusLabel}</span>
           </div>
-          <div style={{color:"rgba(255,255,255,0.25)",fontSize:11,marginTop:9,lineHeight:1.7}}>
-            הקישור עם הקוד נכנס ישירות לשלט בלי להקליד — שולחים אותו לנייד פעם אחת והוא נשמר שם.
+        )}
+
+        {!roomCode ? (
+          <>
+            <div style={{color:"rgba(255,255,255,0.55)",fontSize:14,lineHeight:1.9,marginBottom:14}}>
+              פותחים <a href={(origin || "") + "/remote"} target="_blank" rel="noopener noreferrer" style={{color:"#6ec6ff"}}>{(origin || "") + "/remote"}</a> בנייד — שם נוצר קוד. מקלידים אותו כאן:
+            </div>
+            <input
+              value={codeInput}
+              onChange={e => setCodeInput(normalizeRoomCode(e.target.value))}
+              onKeyDown={e => { if (e.key === "Enter") submit(); }}
+              placeholder="A7K2"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              style={{width:"100%",background:"rgba(0,0,0,0.35)",border:"1px solid rgba(255,107,0,0.4)",borderRadius:12,color:"#fff",padding:"16px",fontFamily:"Oswald,sans-serif",fontSize:38,letterSpacing:12,textAlign:"center",outline:"none",direction:"ltr"}}
+            />
+            <button
+              onClick={submit}
+              disabled={normalizeRoomCode(codeInput).length < 4}
+              style={{width:"100%",marginTop:14,padding:"16px",fontSize:18,fontWeight:900,borderRadius:11,border:"none",cursor:"pointer",fontFamily:"Heebo,sans-serif",color:"#fff",background: normalizeRoomCode(codeInput).length < 4 ? "rgba(255,255,255,0.05)" : "linear-gradient(135deg,#FF6B00,#cc4400)",opacity: normalizeRoomCode(codeInput).length < 4 ? 0.4 : 1}}
+            >התחבר</button>
+          </>
+        ) : (
+          <div style={{background:"rgba(255,107,0,0.07)",border:"1px solid rgba(255,107,0,0.3)",borderRadius:14,padding:"18px",textAlign:"center",marginBottom:16}}>
+            <div style={{color:"rgba(255,255,255,0.35)",fontSize:12,letterSpacing:3,marginBottom:8}}>קוד מחובר</div>
+            <div style={{color:"#FF6B00",fontFamily:"Oswald,sans-serif",fontSize:44,letterSpacing:12,lineHeight:1,direction:"ltr"}}>{roomCode}</div>
           </div>
-        </div>
+        )}
 
-        <ol style={{color:"rgba(255,255,255,0.55)",fontSize:14,lineHeight:1.9,paddingInlineStart:20,marginBottom:16}}>
-          <li>פותחים בנייד את הקישור שלמעלה</li>
-          <li>מקלידים את הקוד (או משתמשים בקישור שכולל אותו)</li>
-          <li>מה שעורכים בנייד לא מוצג על המסך עד ששולחים</li>
-        </ol>
-
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.03)",borderRadius:12,padding:"12px 15px",marginBottom:10}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.03)",borderRadius:12,padding:"12px 15px",marginTop:16,marginBottom:10}}>
           <span style={{color:"rgba(255,255,255,0.55)",fontSize:14}}>שלט רחוק פעיל</span>
           <Toggle value={remoteOn} onChange={setRemoteOn}/>
         </div>
 
-        <button onClick={onNewCode} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.5)",borderRadius:11,padding:"12px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:14}}>🔄 צור קוד חדש — מנתק שלטים קיימים</button>
+        {roomCode && (
+          <button onClick={onClearCode} style={{width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.5)",borderRadius:11,padding:"12px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:14}}>🔌 נתק — הקלדת קוד אחר</button>
+        )}
       </div>
     </div>
   );
@@ -793,13 +770,14 @@ export default function JudoTV() {
   }, [initCtx]);
 
   // ── Remote control link ─────────────────────────────────────────────────────
+  // The code is created on the phone and typed in here — the TV only remembers
+  // the last code that was typed, it never invents one on its own.
   useEffect(() => {
     let code = "";
     try {
       code = normalizeRoomCode(window.localStorage.getItem("judo_room") || "");
-      if (code.length < 4) { code = makeRoomCode(4); window.localStorage.setItem("judo_room", code); }
       if (window.localStorage.getItem("judo_remote_on") === "0") setRemoteOn(false);
-    } catch(e) { code = makeRoomCode(4); }
+    } catch(e) {}
     setRoomCode(code);
   }, []);
 
@@ -807,10 +785,15 @@ export default function JudoTV() {
     try { window.localStorage.setItem("judo_remote_on", remoteOn ? "1" : "0"); } catch(e) {}
   }, [remoteOn]);
 
-  const newRoomCode = () => {
-    const code = makeRoomCode(4);
-    try { window.localStorage.setItem("judo_room", code); } catch(e) {}
-    setRoomCode(code);
+  const applyRoomCode = code => {
+    const c = normalizeRoomCode(code);
+    if (c.length < 4) return;
+    try { window.localStorage.setItem("judo_room", c); } catch(e) {}
+    setRoomCode(c);
+  };
+  const clearRoomCode = () => {
+    try { window.localStorage.removeItem("judo_room"); } catch(e) {}
+    setRoomCode("");
   };
 
   const heavy = { drills, judokas, pairs, notes, globalAutoNext, soundType, projection };
@@ -954,10 +937,10 @@ export default function JudoTV() {
         </div>
 
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          {remoteOn && roomCode && (
+          {remoteOn && (
             <button onClick={() => setModal("remote")} title="חיבור שלט רחוק בנייד" style={{display:"flex",alignItems:"center",gap:7,background:"rgba(255,255,255,0.04)",border:"1px solid "+(tvLink.remoteConnected?"rgba(46,204,113,0.45)":"rgba(255,255,255,0.08)"),borderRadius:9,padding:"8px 12px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:13,fontWeight:700,color:tvLink.remoteConnected?"rgba(46,204,113,0.9)":"rgba(255,255,255,0.5)"}}>
-              <span style={{width:7,height:7,borderRadius:"50%",flexShrink:0,background:tvLink.remoteConnected?"#2ecc71":tvLink.status==="online"?"rgba(255,179,71,0.8)":"rgba(255,68,68,0.7)"}}/>
-              📱 שלט רחוק
+              <span style={{width:7,height:7,borderRadius:"50%",flexShrink:0,background:!roomCode?"rgba(255,255,255,0.3)":tvLink.remoteConnected?"#2ecc71":tvLink.status==="online"?"rgba(255,179,71,0.8)":"rgba(255,68,68,0.7)"}}/>
+              {roomCode ? "📱 שלט רחוק" : "📱 חבר שלט"}
             </button>
           )}
           {!projection && (
@@ -1202,7 +1185,8 @@ export default function JudoTV() {
           roomCode={roomCode}
           remoteOn={remoteOn}
           setRemoteOn={setRemoteOn}
-          onNewCode={newRoomCode}
+          onApplyCode={applyRoomCode}
+          onClearCode={clearRoomCode}
           status={tvLink.status}
           connected={tvLink.remoteConnected}
           onClose={()=>setModal(null)}

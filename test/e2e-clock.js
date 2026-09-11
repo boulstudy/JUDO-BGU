@@ -54,11 +54,17 @@ const drillName = tv => tv.evaluate(() => (document.querySelector('h1') || {}).t
   const phone = await phoneCtx.newPage();
   phone.on('pageerror', e => errs.push('PHONE: ' + e.message));
 
-  await tv.goto(APP + '/', { waitUntil: 'networkidle' });
-  await sleep(1200);
-  const code = await tv.evaluate(() => localStorage.getItem('judo_room'));
-  await phone.goto(APP + '/remote?code=' + code, { waitUntil: 'networkidle' });
-  await sleep(2200);
+  // The code is created on the phone and typed into the TV.
+  await tv.goto(APP + '/display', { waitUntil: 'networkidle' });
+  await sleep(1000);
+  await phone.goto(APP + '/remote', { waitUntil: 'networkidle' });
+  await sleep(800);
+  const code = await phone.evaluate(() => localStorage.getItem('judo_remote_room'));
+  await tv.getByTitle('חיבור שלט רחוק בנייד').click();
+  await sleep(400);
+  await tv.locator('input[placeholder="A7K2"]').fill(code);
+  await tv.getByRole('button', { name: 'התחבר' }).click();
+  await sleep(4000);
 
   // Get the TV running on drill 1.
   await phone.getByRole('button', { name: '▶ התחל' }).click();
