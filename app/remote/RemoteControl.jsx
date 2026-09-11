@@ -127,15 +127,20 @@ export default function RemoteControl() {
 
   useEffect(() => {
     let code = "";
+    let known = false;   // a code we already paired with — the TV remembers it too
     try {
       const params = new URLSearchParams(window.location.search);
       code = normalizeRoomCode(params.get("code") || window.localStorage.getItem("judo_remote_room") || "");
-      if (code.length < 4) {
+      known = code.length >= 4;
+      if (!known) {
         code = makeRoomCode(4);
         window.localStorage.setItem("judo_remote_room", code);
       }
     } catch(e) { code = makeRoomCode(4); }
     setRoom(code);
+    // Only a brand new code has to be typed into the TV, so only then is the
+    // pairing screen worth showing.
+    if (known) setPairingDismissed(true);
     setBoot(true);
   }, []);
 

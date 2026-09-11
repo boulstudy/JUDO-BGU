@@ -173,8 +173,15 @@ const tvHasText = (tv, t) => tv.evaluate(s => document.body.innerText.includes(s
   await phone.screenshot({ path: SHOT + '/phone-more.png' });
 
   // ── reconnect ──────────────────────────────────────────────────────────────
+  // A code that was already paired is not worth showing again, so the pairing
+  // screen must be skipped straight away — well before the auto-dismiss that
+  // follows a connection could account for it.
   await phone.reload({ waitUntil: 'networkidle' });
-  await sleep(3500);
+  await sleep(500);
+  check('a returning phone skips the pairing screen',
+    !(await phone.evaluate(() => document.body.innerText.includes('הקלידו את הקוד הזה'))));
+
+  await sleep(3000);
   check('phone reconnects after a reload', await phone.evaluate(() => document.body.innerText.includes('מחובר למסך')));
   check('phone re-syncs the renamed drill', await phone.evaluate(() => document.body.innerText.includes('ראנדורי נבחרת')));
 
