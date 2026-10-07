@@ -1,0 +1,13 @@
+{
+  "name": "Judo BGU — מצב שיקוף",
+  "short_name": "Judo שיקוף",
+  "start_url": "/solo",
+  "scope": "/solo",
+  "display": "fullscreen",
+  "background_color": "#080a10",
+  "theme_color": "#FF6B00",
+  "orientation": "landscape",
+  "icons": [
+    { "src": "/icon.png", "sizes": "192x192", "type": "image/png" }
+  ]
+}
