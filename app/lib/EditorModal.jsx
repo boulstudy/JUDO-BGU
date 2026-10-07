@@ -5,7 +5,7 @@ import { supa, DRILL_SECTIONS, SEC_COLOR, fmt, totalDrillTime } from "./shared";
 import { DrillForm } from "./ui";
 
 // ── Editor Modal ──────────────────────────────────────────────────────────────
-export default function EditorModal({ drills, setDrills, currentIndex, judokas, setJudokas, pairs, setPairs, onClose }) {
+export default function EditorModal({ drills, setDrills, currentIndex, judokas, setJudokas, onClose }) {
   const [list, setList] = useState(drills.map(d => ({...d})));
   const [editId, setEditId] = useState(null);
   const [editData, setEditData] = useState(null);
@@ -14,7 +14,6 @@ export default function EditorModal({ drills, setDrills, currentIndex, judokas, 
   const [showLib, setShowLib] = useState(false);
   const [tab, setTab] = useState("drills");
   const [localJudokas, setLocalJudokas] = useState(judokas.map(j=>({...j})));
-  const [localPairs, setLocalPairs] = useState(pairs.map(p=>[...p]));
   const [judokaGroupFilter, setJudokaGroupFilter] = useState("כל הנבחרת");
   const [newGroupName, setNewGroupName] = useState("");
 
@@ -41,8 +40,8 @@ export default function EditorModal({ drills, setDrills, currentIndex, judokas, 
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
       <div style={{background:"#0d1020",border:"1px solid rgba(255,107,0,0.28)",borderRadius:18,width:"100%",maxWidth:760,maxHeight:"92vh",overflowY:"auto",padding:22,direction:"rtl"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-          <div style={{display:"flex",gap:6}}>{tabBtn("drills","תרגילים")}{tabBtn("judokas","חברי הנבחרת","tab-judokas")}{tabBtn("pairs","זוגות")}</div>
-          <button onClick={() => { setDrills(list); setJudokas(localJudokas); setPairs(localPairs); onClose(); }} style={{background:"#FF6B00",border:"none",color:"#fff",borderRadius:10,padding:"10px 22px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:15}}>שמור וסגור</button>
+          <div style={{display:"flex",gap:6}}>{tabBtn("drills","תרגילים")}{tabBtn("judokas","חברי הנבחרת","tab-judokas")}</div>
+          <button onClick={() => { setDrills(list); setJudokas(localJudokas); onClose(); }} style={{background:"#FF6B00",border:"none",color:"#fff",borderRadius:10,padding:"10px 22px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:15}}>שמור וסגור</button>
         </div>
 
         {tab === "drills" && (
@@ -141,23 +140,6 @@ export default function EditorModal({ drills, setDrills, currentIndex, judokas, 
               </div>
             ))}
             <button onClick={() => { const name=prompt("שם חבר/ת נבחרת:"); if(name) setLocalJudokas([...localJudokas,{id:Date.now(),name,color:"white",group:"",personalDrills:[]}]); }} style={{background:"rgba(255,107,0,0.1)",border:"1px dashed rgba(255,107,0,0.35)",color:"#FF6B00",borderRadius:10,padding:"10px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:14,width:"100%",marginTop:6}}>+ הוסף חבר/ת נבחרת</button>
-          </div>
-        )}
-
-        {tab === "pairs" && (
-          <div>
-            {localPairs.map(([wid,bid],pi) => (
-              <div key={pi} style={{display:"flex",gap:8,alignItems:"center",marginBottom:9}}>
-                <span style={{color:"rgba(255,255,255,0.3)",fontSize:13,minWidth:46}}>זוג {pi+1}</span>
-                {[0,1].map(side => (
-                  <select key={side} value={side===0?wid:bid} onChange={e => { const v=parseInt(e.target.value); setLocalPairs(localPairs.map((p,i)=>i===pi?p.map((x,s)=>s===side?v:x):p)); }} style={{...inp,flex:1}}>
-                    {localJudokas.map(j=><option key={j.id} value={j.id}>{j.name} ({j.color==="white"?"לבן":"כחול"})</option>)}
-                  </select>
-                ))}
-                <button onClick={() => setLocalPairs(localPairs.filter((_,i)=>i!==pi))} style={{background:"none",border:"none",color:"rgba(255,60,60,0.45)",cursor:"pointer",fontSize:17}}>x</button>
-              </div>
-            ))}
-            <button onClick={() => { const w=localJudokas.find(j=>j.color==="white"); const b=localJudokas.find(j=>j.color==="blue"); if(w&&b) setLocalPairs([...localPairs,[w.id,b.id]]); }} style={{background:"rgba(255,107,0,0.1)",border:"1px dashed rgba(255,107,0,0.35)",color:"#FF6B00",borderRadius:10,padding:"10px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:14,width:"100%",marginTop:6}}>+ זוג חדש</button>
           </div>
         )}
       </div>

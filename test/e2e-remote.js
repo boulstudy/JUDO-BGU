@@ -68,12 +68,10 @@ const tvHasText = (tv, t) => tv.evaluate(s => document.body.innerText.includes(s
 
   const code = await tv.evaluate(() => window.localStorage.getItem('judo_room'));
   check('TV creates its own room code', !!code && code.length === 4, code);
-  check('the welcome screen is held back at first (a remembered phone should not see it flash)',
-    !(await tvHasText(tv, 'המשך בלי שלט')));
-  await sleep(3000);
-  check('TV shows the code on a welcome screen when nobody is connected', await tvHasText(tv, code) && await tvHasText(tv, 'המשך בלי שלט'));
-  check('the welcome screen tells the phone where to go', await tv.evaluate(() => /\/remote/.test(document.body.innerText)));
-  check('the welcome screen carries a QR code for the pairing link', (await tv.locator('svg[aria-label="קוד QR לחיבור השלט"]').count()) === 1);
+  check('TV opens on a start gate that shows the code', await tvHasText(tv, code) && await tvHasText(tv, 'התחל'));
+  check('there is no separate "enable sound" banner', !(await tvHasText(tv, 'להפעלת הצלילים')));
+  check('the start gate tells the phone where to go', await tv.evaluate(() => /\/remote/.test(document.body.innerText)));
+  check('the start gate carries a QR code for the pairing link', (await tv.locator('svg[aria-label="קוד QR לחיבור השלט"]').count()) === 1);
   check('nothing has to be typed on the TV', (await tv.locator('input[placeholder="A7K2"]').count()) === 0);
 
   await phone.goto(APP + '/remote', { waitUntil: 'networkidle' });
@@ -85,8 +83,14 @@ const tvHasText = (tv, t) => tv.evaluate(s => document.body.innerText.includes(s
   await phone.locator('#room-code').fill(code);
   await phone.getByRole('button', { name: 'התחבר', exact: true }).click();
   await sleep(1500);
-  check('TV announces the connection', await tvHasText(tv, 'שלט התחבר'));
-  check('welcome screen closes once the phone is connected', !(await tvHasText(tv, 'המשך בלי שלט')));
+  check('the gate announces the connection and drops the code', await tvHasText(tv, 'השלט מחובר') && !(await tvHasText(tv, code)));
+  await tv.getByRole('button', { name: '▶ התחל' }).click();
+  await sleep(500);
+  check('one press on the TV closes the gate', !(await tvHasText(tv, 'לחיצה אחת פותחת את הצליל')));
+  await sleep(6500);   // the press woke the chrome for a few seconds
+  check('the bare TV shows no top bar while a phone is connected', !(await tvHasText(tv, 'Ben-Gurion')) && !(await tvHasText(tv, 'ערוך אימון')));
+  await tv.mouse.move(200, 200); await tv.mouse.move(320, 260);
+  await sleep(400);
   await sleep(2500);
   check('phone moved on from the code screen once the TV connected',
     !(await phone.evaluate(() => document.body.innerText.includes('מתחבר למסך'))));

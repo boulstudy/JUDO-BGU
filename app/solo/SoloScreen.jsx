@@ -18,7 +18,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 import { supa, fmt } from "../lib/shared";
-import { INIT_JUDOKAS, INIT_PAIRS, INIT_DRILLS } from "../lib/defaults";
+import { INIT_JUDOKAS, INIT_DRILLS } from "../lib/defaults";
 import { useWorkoutClock } from "../lib/clock";
 import { useWakeLock } from "../lib/wakeLock";
 import StageView from "../lib/stage";
@@ -31,7 +31,7 @@ const ORANGE = "#FF6B00";
 const FONT = "Heebo,sans-serif";
 
 const initialData = () => ({
-  drills: INIT_DRILLS, judokas: INIT_JUDOKAS, pairs: INIT_PAIRS,
+  drills: INIT_DRILLS, judokas: INIT_JUDOKAS,
   notes: "", soundType: "beep", globalAutoNext: true,
 });
 
@@ -74,7 +74,6 @@ export default function SoloScreen() {
             ...prev,
             drills: w.drills && w.drills.length ? w.drills : prev.drills,
             judokas: w.judokas && w.judokas.length ? w.judokas : prev.judokas,
-            pairs: w.pairs && w.pairs.length ? w.pairs : prev.pairs,
           }));
         }
       });
@@ -174,10 +173,10 @@ export default function SoloScreen() {
 
   const startEdit = () => { if (running) clock.setRunning(false); setEditStep("warn"); };
   const openEditor = () => {
-    setDraft({ drills: data.drills, judokas: data.judokas, pairs: data.pairs, notes: data.notes });
+    setDraft({ drills: data.drills, judokas: data.judokas, notes: data.notes });
     setEditStep("edit");
   };
-  const changed = !!draft && JSON.stringify(draft) !== JSON.stringify({ drills: data.drills, judokas: data.judokas, pairs: data.pairs, notes: data.notes });
+  const changed = !!draft && JSON.stringify(draft) !== JSON.stringify({ drills: data.drills, judokas: data.judokas, notes: data.notes });
   useEffect(() => { if (editStep === "review" && !changed) { setEditStep(null); setDraft(null); } }, [editStep, changed]);
 
   const sync = () => {
@@ -202,7 +201,7 @@ export default function SoloScreen() {
       <StageView
         drills={data.drills} drillIdx={drillIdx} phaseIdx={clock.phaseIdx} timeLeft={clock.timeLeft}
         running={running} totalElapsed={clock.totalElapsed} alertActive={clock.alertActive}
-        judokas={data.judokas} pairs={data.pairs} notes={data.notes} personalTimers={clock.personalTimers}
+       
       />
       </div>
 
@@ -283,7 +282,6 @@ export default function SoloScreen() {
           drills={draft.drills} setDrills={d => setDraft(p => ({ ...p, drills: d }))}
           currentIndex={drillIdx}
           judokas={draft.judokas} setJudokas={j => setDraft(p => ({ ...p, judokas: j }))}
-          pairs={draft.pairs} setPairs={pr => setDraft(p => ({ ...p, pairs: pr }))}
           onClose={() => setEditStep("review")}
         />
         </div>
@@ -295,14 +293,6 @@ export default function SoloScreen() {
           <div style={{ fontSize: 16, color: "#dfe4ee" }}>
             המסך המוקרן עדיין מציג את הגרסה הקודמת. {draft.drills.length} תרגילים · {fmt(draft.drills.reduce((a, d) => a + (d.durationWork + (d.durationRest || 0)) * (d.rounds || 1), 0))}
           </div>
-          <label style={{ width: "100%", maxWidth: 520, textAlign: "start", fontSize: 14, color: "#c3cada" }}>
-            דגשים לאימון
-            <textarea
-              value={draft.notes || ""} onChange={e => setDraft(p => ({ ...p, notes: e.target.value }))}
-              placeholder="דגשים שיופיעו על המסך..."
-              style={{ display: "block", width: "100%", minHeight: 90, marginTop: 6, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.22)", borderRadius: 10, color: "#fff", padding: 12, fontFamily: FONT, fontSize: 16, lineHeight: 1.5, resize: "vertical", direction: "rtl", userSelect: "text", WebkitUserSelect: "text" }}
-            />
-          </label>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
             <button autoFocus onClick={sync} style={bigBtn(true)}>🔄 סנכרן לשיקוף</button>
             <button onClick={() => setEditStep("edit")} style={bigBtn(false)}>המשך לערוך</button>
@@ -315,8 +305,8 @@ export default function SoloScreen() {
       {showLib && draft && (
         <div {...uiProps} style={{ display: "contents" }}>
         <WorkoutModal
-          drills={draft.drills} judokas={draft.judokas} pairs={draft.pairs}
-          onLoad={w => setDraft(p => ({ ...p, drills: w.drills || p.drills, judokas: w.judokas || p.judokas, pairs: w.pairs || p.pairs }))}
+          drills={draft.drills} judokas={draft.judokas}
+          onLoad={w => setDraft(p => ({ ...p, drills: w.drills || p.drills, judokas: w.judokas || p.judokas }))}
           onClose={() => setShowLib(false)}
         />
         </div>

@@ -4,11 +4,11 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 import { supa, fmt, getDrillPhases } from "./lib/shared";
 import { useTvLink } from "./lib/link";
-import { INIT_JUDOKAS, INIT_PAIRS, INIT_DRILLS } from "./lib/defaults";
+import { INIT_JUDOKAS, INIT_DRILLS } from "./lib/defaults";
 import EditorModal from "./lib/EditorModal";
 import WorkoutModal from "./lib/WorkoutModal";
 import { makeRoomCode } from "./lib/remoteBus";
-import { PairOverlay, PairingModal } from "./lib/pairing";
+import { StartGate, PairingModal } from "./lib/pairing";
 import { COMMANDS, pickPatch } from "./lib/remoteProtocol";
 import { useWorkoutClock } from "./lib/clock";
 import StageView from "./lib/stage";
@@ -112,7 +112,6 @@ function AttendanceModal({ judokas, onClose }) {
 export default function JudoTV() {
   const [drills,  setDrills]  = useState(INIT_DRILLS);
   const [judokas, setJudokas] = useState(INIT_JUDOKAS);
-  const [pairs,   setPairs]   = useState(INIT_PAIRS);
   const [modal,  setModal]  = useState(null);
   const [globalAutoNext, setGlobalAutoNext] = useState(true);
   const [soundType, setSoundType] = useState("beep");
@@ -124,7 +123,7 @@ export default function JudoTV() {
   const [roomCode,    setRoomCode]    = useState("");
   const [remoteOn,    setRemoteOn]    = useState(true);
   const [projection,  setProjection]  = useState(false); // clean screen: hide the controls
-  const [audioReady,  setAudioReady]  = useState(false);
+  const [started,     setStarted]     = useState(false);   // the start gate has been pressed
 
   const {
     drillIdx, setDrillIdx, phaseIdx, setPhaseIdx, timeLeft, setTimeLeft,
@@ -142,19 +141,18 @@ export default function JudoTV() {
         const w = r[0];
         if (w.drills && w.drills.length) setDrills(w.drills);
         if (w.judokas && w.judokas.length) setJudokas(w.judokas);
-        if (w.pairs && w.pairs.length) setPairs(w.pairs);
       }
     });
   }, []);
 
-  // The browser only lets us open an AudioContext from inside a real tap, so a
-  // play command arriving from the phone cannot unlock it. Track whether the TV
-  // has been tapped once, and nag until it has.
-  const unlockAudio = useCallback(() => {
-    const ctx = initCtx();
-    if (!ctx) return;
-    if (ctx.state === "running") setAudioReady(true);
-    else setTimeout(() => setAudioReady(ctx.state === "running"), 250);
+  // The browser only lets us open an AudioContext from inside a real press, so a
+  // play command arriving from the phone cannot unlock it. The TV therefore opens
+  // on a start gate (lib/pairing.jsx): one press there unlocks the speakers for good.
+  const unlockAudio = useCallback(() => { initCtx(); }, [initCtx]);
+  const startShow = useCallback(() => {
+    initCtx();
+    setStarted(true);
+    try { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); } catch(e) {}
   }, [initCtx]);
 
   // ── Remote control link ─────────────────────────────────────────────────────
@@ -182,13 +180,13 @@ export default function JudoTV() {
     setRoomCode(code);
   };
 
-  const heavy = { drills, judokas, pairs, notes, globalAutoNext, soundType, projection };
+  const heavy = { drills, judokas, notes, globalAutoNext, soundType, projection };
   const heavyRef = useRef(heavy);
   heavyRef.current = heavy;
 
   const [rev, setRev] = useState(1);
   useEffect(() => { setRev(r => r + 1); },
-    [drills, judokas, pairs, notes, globalAutoNext, soundType, projection]);
+    [drills, judokas, notes, globalAutoNext, soundType, projection]);
 
   const handleRemoteCommand = m => {
     switch (m.c) {
@@ -219,7 +217,6 @@ export default function JudoTV() {
 
     if (nextDrills !== drills)        setDrills(nextDrills);
     if (Array.isArray(p.judokas))     setJudokas(p.judokas);
-    if (Array.isArray(p.pairs))       setPairs(p.pairs);
     if (typeof p.notes === "string")  setNotes(p.notes);
     if (p.globalAutoNext !== undefined) setGlobalAutoNext(!!p.globalAutoNext);
     if (p.soundType)                  setSoundType(p.soundType);
@@ -268,15 +265,8 @@ export default function JudoTV() {
     clearTimeout(peekTimer.current);
     peekTimer.current = setTimeout(() => setPeek(false), 6000);
   }, []);
-  const showControls = !projection && (!tvLink.remoteConnected || peek);
-
-  // Welcome screen with the code — only while there is nobody on the other end,
-  // and not for the first few seconds, so a phone that remembers this TV
-  // reconnects without the screen ever flashing up.
-  const [pairSkipped, setPairSkipped] = useState(false);
-  const [pairReady, setPairReady] = useState(false);
-  useEffect(() => { const id = setTimeout(() => setPairReady(true), 3500); return () => clearTimeout(id); }, []);
-  const showPair = remoteOn && !!roomCode && pairReady && !pairSkipped && !tvLink.remoteConnected && !running && !modal;
+  const barVisible   = peek || (!tvLink.remoteConnected && !projection);
+  const showControls = !projection && barVisible;
 
   const [connToast, setConnToast] = useState(false);
   const wasConn = useRef(false);
@@ -329,15 +319,8 @@ export default function JudoTV() {
         button:focus-visible,input:focus-visible{outline:3px solid #FF6B00;outline-offset:2px}
       `}</style>
 
-      {/* Audio can only be unlocked by a tap on the TV itself */}
-      {!audioReady && remoteOn && (
-        <div onClick={unlockAudio} style={{position:"fixed",top:14,left:"50%",transform:"translateX(-50%)",zIndex:120,background:"rgba(255,107,0,0.16)",border:"1px solid rgba(255,107,0,0.5)",color:"#FF6B00",borderRadius:11,padding:"10px 16px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:14,fontWeight:700,direction:"rtl"}}>
-          🔊 לחצו כאן להפעלת הצלילים במסך
-        </div>
-      )}
-
-      {/* TOP BAR */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 28px",borderBottom:"1px solid rgba(255,255,255,0.055)",background:"rgba(0,0,0,0.32)",flexShrink:0,position:"relative",zIndex:10}}>
+      {/* TOP BAR — only while the coach pokes the TV; otherwise the screen stays bare */}
+      {barVisible && <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 28px",borderBottom:"1px solid rgba(255,255,255,0.055)",background:"rgba(0,0,0,0.32)",flexShrink:0,position:"relative",zIndex:10}}>
         <div style={{display:"flex",alignItems:"center",gap:13}}>
           <div style={{width:44,height:44,borderRadius:11,background:"linear-gradient(135deg,#FF6B00,#cc4400)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,boxShadow:"0 4px 16px rgba(255,107,0,0.38)"}}>🥋</div>
           <div>
@@ -367,15 +350,13 @@ export default function JudoTV() {
           )}
           <button onClick={() => setToolbarOpen(o=>!o)} style={{background:toolbarOpen?"rgba(255,107,0,0.2)":"rgba(255,255,255,0.05)",border:toolbarOpen?"1px solid rgba(255,107,0,0.5)":"1px solid rgba(255,255,255,0.1)",color:toolbarOpen?"#FF6B00":"rgba(255,255,255,"+(projection?"0.22":"0.6")+")",borderRadius:9,padding:"8px 16px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:15,opacity:projection?0.5:1}}>☰</button>
         </div>
-      </div>
+      </div>}
 
       {/* STAGE — everything the trainees read lives in lib/stage.jsx */}
       <StageView
         drills={drills} drillIdx={drillIdx} phaseIdx={phaseIdx} timeLeft={timeLeft}
         running={running} totalElapsed={totalElapsed} alertActive={alertActive}
-        judokas={judokas} pairs={pairs} notes={notes} personalTimers={personalTimers}
-        onSelectDrill={goToDrill}
-        onSelectPhase={i => { setPhaseIdx(i); setTimeLeft(phases[i].duration); }}
+                onSelectPhase={i => { setPhaseIdx(i); setTimeLeft(phases[i].duration); }}
         controls={showControls ? (
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
 
@@ -452,8 +433,8 @@ export default function JudoTV() {
         </div>
       )}
 
-      {modal==="edit" && <EditorModal drills={drills} setDrills={d=>{setDrills(d);if(drillIdx>=d.length)setDrillIdx(Math.max(0,d.length-1));}} currentIndex={drillIdx} judokas={judokas} setJudokas={setJudokas} pairs={pairs} setPairs={setPairs} onClose={()=>setModal(null)}/>}
-      {modal==="workouts" && <WorkoutModal drills={drills} judokas={judokas} pairs={pairs} onLoad={w=>{if(w.drills)setDrills(w.drills);if(w.judokas)setJudokas(w.judokas);if(w.pairs)setPairs(w.pairs);setDrillIdx(0);setRunning(false);}} onClose={()=>setModal(null)}/>}
+      {modal==="edit" && <EditorModal drills={drills} setDrills={d=>{setDrills(d);if(drillIdx>=d.length)setDrillIdx(Math.max(0,d.length-1));}} currentIndex={drillIdx} judokas={judokas} setJudokas={setJudokas} onClose={()=>setModal(null)}/>}
+      {modal==="workouts" && <WorkoutModal drills={drills} judokas={judokas} onLoad={w=>{if(w.drills)setDrills(w.drills);if(w.judokas)setJudokas(w.judokas);setDrillIdx(0);setRunning(false);}} onClose={()=>setModal(null)}/>}
       {modal==="notes" && <NotesModal notes={notes} setNotes={setNotes} onClose={()=>setModal(null)}/>}
       {modal==="attendance" && <AttendanceModal judokas={judokas} onClose={()=>setModal(null)}/>}
       {modal==="remote" && (
@@ -467,8 +448,8 @@ export default function JudoTV() {
           onClose={()=>setModal(null)}
         />
       )}
-      {showPair && <PairOverlay roomCode={roomCode} onSkip={() => setPairSkipped(true)}/>}
-      {connToast && (
+      {!started && <StartGate roomCode={roomCode} remoteOn={remoteOn} connected={tvLink.remoteConnected} onStart={startShow}/>}
+      {connToast && started && (
         <div role="status" style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",zIndex:160,background:"rgba(46,204,113,0.18)",border:"1px solid rgba(46,204,113,0.7)",color:"#7dffb0",borderRadius:12,padding:"10px 22px",fontWeight:800,fontSize:20}}>📱 שלט התחבר ✓</div>
       )}
       </div>

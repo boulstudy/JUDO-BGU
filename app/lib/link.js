@@ -21,7 +21,7 @@ function useClock(ms) {
  * @param {string}   room      room code
  * @param {boolean}  active    false disables the link entirely
  * @param {object}   light     { drillIdx, phaseIdx, timeLeft, running, totalElapsed }
- * @param {object}   heavyRef  ref holding { drills, judokas, pairs, notes, ... }
+ * @param {object}   heavyRef  ref holding { drills, judokas, notes, ... }
  * @param {number}   rev       bumped whenever the heavy state changes
  * @param {function} onCommand called with the incoming { t:"cmd", c, ... }
  * @param {function} onPatch   called with (patch, then)

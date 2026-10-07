@@ -28,7 +28,6 @@ const ORANGE = "#FF6B00";
 const PATCH_LABELS = {
   drills: "מערך האימון",
   judokas: "חברי הנבחרת",
-  pairs: "זוגות",
   notes: "הערות",
   timeLeft: "זמן",
   drillIdx: "תרגיל נוכחי",
@@ -232,7 +231,6 @@ export default function RemoteControl() {
   const base = {
     drills:  d && Array.isArray(d.drills)  ? d.drills  : [],
     judokas: d && Array.isArray(d.judokas) ? d.judokas : [],
-    pairs:   d && Array.isArray(d.pairs)   ? d.pairs   : [],
     notes:          d ? (d.notes || "")        : "",
     globalAutoNext: d ? !!d.globalAutoNext     : true,
     soundType:      d ? (d.soundType || "beep"): "beep",
@@ -742,7 +740,6 @@ function MoreTab({ view, stage, workouts, setWorkouts, room, onDisconnect }) {
                 const patch = { drillIdx:0, phaseIdx:0 };
                 if (w.drills  && w.drills.length)  patch.drills  = w.drills;
                 if (w.judokas && w.judokas.length) patch.judokas = w.judokas;
-                if (w.pairs   && w.pairs.length)   patch.pairs   = w.pairs;
                 const ph = getDrillPhases((patch.drills || view.drills)[0]);
                 patch.timeLeft = ph[0] ? ph[0].duration : 60;
                 stage(patch);

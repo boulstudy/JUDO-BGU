@@ -8,7 +8,6 @@ export const INIT_JUDOKAS = [
   { id:5, name:"עידן ב׳",  color:"white", personalDrills:[{id:501,name:"סיאו-אוצ׳י",duration:120}]},
   { id:6, name:"גל ש׳",    color:"blue",  personalDrills:[{id:601,name:"טאיו-נאגה",duration:120}]},
 ];
-export const INIT_PAIRS = [[1,2],[3,4],[5,6]];
 export const INIT_DRILLS = [
   { id:1, name:"חימום כללי",    section:"warmup",    durationWork:300, durationRest:0,  rounds:1, pattern:"together",  restTiming:"none",        activeColor:"both",  type:"group",    note:"ריצה + תנועתיות",         autoNext:true  },
   { id:2, name:"נאגה גדן",      section:"technique", durationWork:60,  durationRest:15, rounds:5, pattern:"alternate", restTiming:"after_each",  activeColor:"white", type:"partner",  note:"זריקה לצד שמאל",          autoNext:true  },

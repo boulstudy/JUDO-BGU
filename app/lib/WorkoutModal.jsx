@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supa, fmt, totalDrillTime } from "./shared";
 
 // ── Workout Modal ─────────────────────────────────────────────────────────────
-export default function WorkoutModal({ drills, judokas, pairs, onLoad, onClose }) {
+export default function WorkoutModal({ drills, judokas, onLoad, onClose }) {
   const [workouts, setWorkouts] = useState([]);
   const [newName, setNewName] = useState("");
   const [newDate, setNewDate] = useState("");
@@ -22,7 +22,7 @@ export default function WorkoutModal({ drills, judokas, pairs, onLoad, onClose }
   const save = async () => {
     if (!newName.trim()) return;
     setSaving(true);
-    const r = await supa("workouts", { method:"POST", body:JSON.stringify({date:newDate,name:newName,drills,judokas,pairs}) });
+    const r = await supa("workouts", { method:"POST", body:JSON.stringify({date:newDate,name:newName,drills,judokas,pairs:[]}) });
     if(r && r[0]) setWorkouts(prev=>[r[0],...prev]);
     setSaving(false);
     setNewName("");
@@ -30,8 +30,8 @@ export default function WorkoutModal({ drills, judokas, pairs, onLoad, onClose }
 
   const update = async (id) => {
     setUpdatingId(id);
-    await supa("workouts?id=eq."+id, { method:"PATCH", body:JSON.stringify({drills,judokas,pairs}) });
-    setWorkouts(prev => prev.map(w => w.id===id ? {...w,drills,judokas,pairs} : w));
+    await supa("workouts?id=eq."+id, { method:"PATCH", body:JSON.stringify({drills,judokas,pairs:[]}) });
+    setWorkouts(prev => prev.map(w => w.id===id ? {...w,drills,judokas,pairs:[]} : w));
     setUpdatingId(null);
   };
 

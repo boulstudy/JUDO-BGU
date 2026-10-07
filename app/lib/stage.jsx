@@ -7,9 +7,10 @@
 // own). Everything is sized in viewport-height units so the same view is
 // legible on a 4K TV and on a phone mirrored in landscape.
 //
-// Reading order, by importance: time left → what we are doing → who works →
-// what is next → context (progress, list, coach's notes). Colour is never the
-// only carrier of meaning; every state also has a word.
+// Deliberately bare — only what the room needs *right now*: time left → what we
+// are doing → who works → what is next. The plan, notes and every control live
+// on the coach's phone. Colour is never the only carrier of meaning; every
+// state also has a word.
 
 import { SEC_COLOR, fmt, getDrillPhases, totalDrillTime } from "./shared";
 import GiIcon from "./GiIcon";
@@ -25,14 +26,10 @@ const CSS = `
 .st-root *{box-sizing:border-box}
 .st-body{flex:1;min-height:0;display:flex;gap:${U(2.4)};padding:${U(1.8)} ${U(3)} ${U(2)}}
 .st-main{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;gap:${U(1.2)}}
-.st-side{width:clamp(220px,27vw,560px);flex-shrink:0;display:flex;flex-direction:column;gap:${U(1.6)};min-height:0}
-.st-list{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:${U(0.8)}}
-.st-item[role=button]{cursor:pointer}
-.st-item:focus-visible{outline:3px solid #FF6B00;outline-offset:2px}
 @keyframes stFlash{0%{opacity:.6}100%{opacity:0}}
 @keyframes stPop{0%{transform:scale(1.18);opacity:.2}100%{transform:scale(1);opacity:1}}
 @keyframes stBlink{0%,100%{opacity:1}50%{opacity:.45}}
-@media (max-aspect-ratio:1/1){.st-side{display:none}.st-body{padding:${U(1.5)} ${U(2)}}}
+@media (max-aspect-ratio:1/1){.st-body{padding:${U(1.5)} ${U(2)}}}
 @media (prefers-reduced-motion:reduce){.st-anim{animation:none!important}}
 `;
 
@@ -70,32 +67,9 @@ function Sides({ who, resting, compact }) {
   );
 }
 
-function Personal({ judokas, timers }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(" + U(30) + ",1fr))", gap: U(1) }}>
-      {judokas.map(j => {
-        const t = timers[j.id];
-        const pd = j.personalDrills && j.personalDrills[t ? t.drillIdx : 0];
-        return (
-          <div key={j.id} style={{ background: "#141824", border: `${U(0.25)} solid #2a3142`, borderRadius: U(1.2), padding: `${U(1)} ${U(1.4)}`, display: "flex", alignItems: "center", gap: U(1.2) }}>
-            <GiIcon color={j.color === "blue" ? "blue" : "white"} size={`calc(var(--u) * 4.4)`} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: U(2.6), fontWeight: 800 }}>{j.name}</div>
-              <div style={{ fontSize: U(2.2), color: "#c3cada", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pd ? pd.name : "—"}</div>
-            </div>
-            <span style={{ fontFamily: "Oswald,sans-serif", fontSize: U(3.4), fontVariantNumeric: "tabular-nums" }}>{fmt(t ? t.timeLeft : 0)}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 export default function StageView({
   drills, drillIdx, phaseIdx, timeLeft, running, totalElapsed, alertActive,
-  judokas = [], pairs = [], notes = "", personalTimers = {},
   controls = null,          // node under the sides panel (TV control row)
-  onSelectDrill = null,     // (i) => void — makes the list clickable
   onSelectPhase = null,     // (i) => void — makes the phase segments clickable
 }) {
   const current = drills[drillIdx] || drills[0];
@@ -132,15 +106,12 @@ export default function StageView({
   const upcoming = upcomingPhase
     ? upcomingPhase.label
     : nextDrill ? nextDrill.name : "";
-  const nextLine = nextPhase
+  const where = `תרגיל ${drillIdx + 1} מתוך ${drills.length}`;
+  const nextLine = (nextPhase
     ? `הבא: ${nextPhase.label} ${fmt(nextPhase.duration)}`
-    : nextDrill ? `תרגיל הבא: ${nextDrill.name}` : "סוף האימון";
+    : nextDrill ? `תרגיל הבא: ${nextDrill.name}` : "סוף האימון") + "  ·  " + where;
 
   const countdown = running && timeLeft >= 1 && timeLeft <= 3;
-
-  // Current + next three while running; the whole plan while paused.
-  const listFrom = running ? Math.max(0, drillIdx) : 0;
-  const visible = running ? drills.slice(listFrom, listFrom + 4) : drills;
 
   return (
     <div className="st-root">
@@ -206,60 +177,12 @@ export default function StageView({
           </div>
 
           {/* who works */}
-          {isPersonal
-            ? <Personal judokas={judokas} timers={personalTimers} />
-            : <Sides who={phase.who} resting={resting} compact={compact} />}
+          {!isPersonal && <Sides who={phase.who} resting={resting} compact={compact} />}
 
           {controls}
 
           <div style={{ textAlign: "center", color: "#c3cada", fontSize: U(3), fontWeight: 700, minHeight: U(3.6) }}>{nextLine}</div>
         </div>
-
-        {/* context */}
-        <aside className="st-side" aria-label="מערך האימון">
-          <div style={{ fontSize: U(2.2), letterSpacing: 2, color: "#9aa6ba", fontWeight: 700 }}>מערך האימון</div>
-          <div className="st-list">
-            {visible.map((d, k) => {
-              const i = running ? listFrom + k : k;
-              const curr = i === drillIdx, done = i < drillIdx;
-              const sc = SEC_COLOR[d.section || "warmup"] || "#FF6B00";
-              const click = onSelectDrill ? () => onSelectDrill(i) : undefined;
-              return (
-                <div key={d.id} className="st-item"
-                  role={click ? "button" : undefined} tabIndex={click ? 0 : undefined}
-                  onClick={click} onKeyDown={click ? e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); click(); } } : undefined}
-                  style={{
-                    display: "flex", alignItems: "center", gap: U(1.2), padding: `${U(1.1)} ${U(1.4)}`, borderRadius: U(1.2), flexShrink: 0,
-                    background: curr ? "rgba(255,107,0,0.16)" : "#10141f",
-                    border: curr ? `${U(0.3)} solid #FF6B00` : `${U(0.3)} solid #1f2637`,
-                    opacity: done ? 0.7 : 1,
-                  }}>
-                  <div style={{ width: U(0.7), alignSelf: "stretch", borderRadius: 3, background: sc, flexShrink: 0 }} />
-                  <span style={{
-                    width: U(3.6), height: U(3.6), borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: U(2), fontWeight: 800, background: curr ? "#FF6B00" : "#232b3f", color: "#fff",
-                  }}>{done ? "✓" : i + 1}</span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: U(2.9), fontWeight: curr ? 900 : 600, color: curr ? "#fff" : "#dfe4ee", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</div>
-                    <div style={{ fontSize: U(2.1), color: "#b7c0d1", marginTop: U(0.2) }}>{d.type !== "rest" && d.rounds > 1 ? d.rounds + "× · " : ""}{fmt(totalDrillTime(d))}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {notes && notes.trim() && (
-            <div style={{ background: "rgba(255,179,71,0.1)", border: `${U(0.3)} solid rgba(255,179,71,0.5)`, borderRadius: U(1.2), padding: `${U(1.2)} ${U(1.6)}`, maxHeight: "34%", overflowY: "auto" }}>
-              <div style={{ fontSize: U(2), fontWeight: 800, color: "#ffc15a", marginBottom: U(0.6) }}>דגשים</div>
-              <div style={{ fontSize: U(2.8), lineHeight: 1.4, whiteSpace: "pre-wrap" }}>{notes}</div>
-            </div>
-          )}
-
-          <div style={{ display: "flex", justifyContent: "space-between", gap: U(2), paddingTop: U(1), borderTop: "1px solid #1f2637", fontSize: U(2.4) }}>
-            <span style={{ color: "#b7c0d1" }}>זמן שעבר <b style={{ color: "#fff", fontFamily: "Oswald,sans-serif", fontSize: U(3), marginInlineStart: U(0.6) }}>{fmt(totalElapsed)}</b></span>
-            <span style={{ color: "#b7c0d1" }}>{"סה\"כ"} <b style={{ color: "#fff", fontFamily: "Oswald,sans-serif", fontSize: U(3), marginInlineStart: U(0.6) }}>{fmt(totalDur)}</b></span>
-          </div>
-        </aside>
       </div>
 
       {/* one flash on a switch — a single event, not a strobe */}

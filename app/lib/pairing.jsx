@@ -54,27 +54,41 @@ function Code({ code, big }) {
   );
 }
 
-// Full-screen welcome. Appears when the TV has no remote and nothing is running.
-export function PairOverlay({ roomCode, onSkip }) {
+// Full-screen start gate. A browser only turns sound on after a real touch, click
+// or key press *on this screen* — a command arriving from the phone cannot do it.
+// So instead of a "turn on sound" button the TV always opens on this screen, and
+// the one press that starts it (OK on a TV remote works) also unlocks the speakers
+// for the rest of the session. If a phone is not connected yet it shows the code.
+export function StartGate({ roomCode, remoteOn, connected, onStart }) {
   const host = useOrigin();
+  const showCode = remoteOn && !!roomCode && !connected;
   return (
-    <div role="dialog" aria-label="חיבור שלט" style={{
+    <div role="dialog" aria-label="התחלה" style={{
       position: "fixed", inset: 0, zIndex: 150, background: "rgba(8,10,16,0.99)", direction: "rtl",
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "calc(var(--u,1vh) * 3)",
       fontFamily: "Heebo,sans-serif", color: "#fff", padding: 24, textAlign: "center",
     }}>
       <div style={{ fontSize: "calc(var(--u,1vh) * 5.5)", fontWeight: 900 }}>🥋 נבחרת ג׳ודו BGU</div>
-      <div style={{ fontSize: "calc(var(--u,1vh) * 3.6)", fontWeight: 700, color: "#c3cada" }}>חברו את הנייד כשלט</div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "calc(var(--u,1vh) * 6)", flexWrap: "wrap" }}>
-        <PairQR code={roomCode} size="calc(var(--u,1vh) * 30)" />
-        <Code code={roomCode} big />
-      </div>
-      <Steps host={host} big />
-      <button autoFocus onClick={onSkip} style={{
-        marginTop: "calc(var(--u,1vh) * 1.5)", padding: "calc(var(--u,1vh) * 2) calc(var(--u,1vh) * 5)",
-        fontSize: "calc(var(--u,1vh) * 3)", fontWeight: 900, borderRadius: 14, cursor: "pointer",
-        fontFamily: "Heebo,sans-serif", color: "#fff", background: "rgba(255,255,255,0.08)", border: "2px solid rgba(255,255,255,0.35)",
-      }}>המשך בלי שלט</button>
+      {showCode && (
+        <>
+          <div style={{ fontSize: "calc(var(--u,1vh) * 3.6)", fontWeight: 700, color: "#c3cada" }}>חברו את הנייד כשלט</div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "calc(var(--u,1vh) * 6)", flexWrap: "wrap" }}>
+            <PairQR code={roomCode} size="calc(var(--u,1vh) * 30)" />
+            <Code code={roomCode} big />
+          </div>
+          <Steps host={host} big />
+        </>
+      )}
+      {remoteOn && connected && (
+        <div role="status" style={{ fontSize: "calc(var(--u,1vh) * 5)", fontWeight: 900, color: "#7dffb0" }}>📱 השלט מחובר ✓</div>
+      )}
+      <button autoFocus onClick={onStart} style={{
+        marginTop: "calc(var(--u,1vh) * 1.5)", padding: "calc(var(--u,1vh) * 2.2) calc(var(--u,1vh) * 7)",
+        fontSize: "calc(var(--u,1vh) * 4)", fontWeight: 900, borderRadius: 16, cursor: "pointer",
+        fontFamily: "Heebo,sans-serif", color: "#fff", background: "linear-gradient(135deg,#2ecc71,#1f9c54)", border: "none",
+        boxShadow: "0 8px 32px rgba(46,204,113,0.35)",
+      }}>▶ התחל</button>
+      <div style={{ fontSize: "calc(var(--u,1vh) * 2.4)", color: "#aab3c5" }}>לחיצה אחת פותחת את הצליל במסך</div>
     </div>
   );
 }

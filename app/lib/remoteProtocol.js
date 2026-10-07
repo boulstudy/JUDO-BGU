@@ -3,9 +3,9 @@
 // TV → remote
 //   { t:"tick", rev, s:{ drillIdx, phaseIdx, timeLeft, running, totalElapsed, at } }
 //       Sent on every clock change and as an idle heartbeat. `rev` counts the
-//       heavy state (drills/judokas/pairs/notes/settings); when the remote sees
+//       heavy state (drills/judokas/notes/settings); when the remote sees
 //       a rev it does not have, it asks for a full snapshot.
-//   { t:"full", rev, s:{...tick state}, d:{ drills, judokas, pairs, notes,
+//   { t:"full", rev, s:{...tick state}, d:{ drills, judokas, notes,
 //                                           globalAutoNext, soundType, projection } }
 //   { t:"bye" }                    TV is going away
 //
@@ -39,7 +39,7 @@ export const PEER_TIMEOUT_MS = 8000;
 
 // Keys of the heavy state a patch may carry.
 export const PATCH_KEYS = [
-  "drills", "judokas", "pairs", "notes",
+  "drills", "judokas", "notes",
   "globalAutoNext", "soundType", "projection",
   "drillIdx", "phaseIdx", "timeLeft",
 ];
