@@ -99,14 +99,14 @@ const drillTitle = p => p.evaluate(() => (document.querySelector('h1') || {}).te
   check('opening the editor pauses the clock', running1 !== null && (await clockSecs(p)) === (await clockSecs(p)) && Math.abs((await clockSecs(p)) - running1) <= 1, running1 + ' → ' + (await clockSecs(p)));
   await p.getByRole('button', { name: 'ערוך בכל זאת' }).click();
   await sleep(600);
-  check('the editor opens', await hasText(p, 'שמור וסגור'));
+  check('the builder opens', await hasText(p, 'בונה מערך אימון') && await hasText(p, 'מערך האימון'));
 
-  await p.getByRole('button', { name: 'ערוך' }).nth(0).click();
+  await p.getByRole('button', { name: 'ערוך צעדים של חימום כללי' }).click();
   await sleep(400);
-  await p.locator('input[placeholder="שם"]').first().fill('חימום פרטי');
-  await p.getByRole('button', { name: 'שמור', exact: true }).first().click();
-  await sleep(300);
-  await p.getByRole('button', { name: 'שמור וסגור' }).click();
+  await p.getByLabel('שם התרגיל').fill('חימום פרטי');
+  await p.getByRole('button', { name: /חזרה למערך/ }).click();
+  await sleep(200);
+  await p.getByRole('button', { name: '✓ סיום' }).click();
   await sleep(500);
   check('after editing, the coach is asked to sync', await hasText(p, 'סנכרן לשיקוף') && await hasText(p, 'המסך המוקרן עדיין מציג את הגרסה הקודמת'));
   check('the stage still shows the OLD name until synced', (await drillTitle(p)) === 'חימום כללי', await drillTitle(p));
@@ -122,11 +122,11 @@ const drillTitle = p => p.evaluate(() => (document.querySelector('h1') || {}).te
   await sleep(300);
   await p.getByRole('button', { name: 'ערוך בכל זאת' }).click();
   await sleep(500);
-  await p.getByRole('button', { name: 'ערוך' }).nth(0).click();
+  await p.getByRole('button', { name: 'ערוך צעדים של חימום פרטי' }).click();
   await sleep(300);
-  await p.locator('input[placeholder="שם"]').first().fill('לא יישמר');
-  await p.getByRole('button', { name: 'שמור', exact: true }).first().click();
-  await p.getByRole('button', { name: 'שמור וסגור' }).click();
+  await p.getByLabel('שם התרגיל').fill('לא יישמר');
+  await p.getByRole('button', { name: /חזרה למערך/ }).click();
+  await p.getByRole('button', { name: '✓ סיום' }).click();
   await sleep(400);
   await p.getByRole('button', { name: 'בטל שינויים' }).click();
   await sleep(400);

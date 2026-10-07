@@ -198,6 +198,22 @@ const tvHasText = (tv, t) => tv.evaluate(s => document.body.innerText.includes(s
   check('phone reconnects after a reload', await phone.evaluate(() => document.body.innerText.includes('מחובר למסך')));
   check('phone re-syncs the renamed drill', await phone.evaluate(() => document.body.innerText.includes('ראנדורי נבחרת')));
 
+  // ── the workout builder opens from the phone and stages into the draft ──────
+  await phone.getByRole('button', { name: 'מערך' }).click();
+  await sleep(300);
+  await phone.getByRole('button', { name: /בונה מערך/ }).click();
+  await sleep(500);
+  check('the builder opens on the phone with catalog and basics', await phone.evaluate(() => document.body.innerText.includes('הקטלוג שלי') || document.body.innerText.includes('קטלוג')));
+  const before = await phone.evaluate(() => document.querySelectorAll('[data-drill]').length);
+  await phone.getByRole('button', { name: '＋ מנוחה' }).click();
+  await sleep(300);
+  check('adding in the builder changes the workout', (await phone.evaluate(() => document.querySelectorAll('[data-drill]').length)) === before + 1);
+  await phone.getByRole('button', { name: '✓ סיום' }).click();
+  await sleep(400);
+  await phone.getByRole('button', { name: 'שלט' }).click();
+  await sleep(300);
+  check('the change is a private draft until sent', await phone.evaluate(() => document.body.innerText.includes('טיוטה')));
+
   // Opening a link that carries the code needs no typing at all.
   const phone2Ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await phone2Ctx.addInitScript(redirect);

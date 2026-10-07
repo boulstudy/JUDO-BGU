@@ -22,6 +22,7 @@
 | כניסה | `/` | **"מה המכשיר הזה?"** — 📺 המסך באולם / 📱 הנייד שלי (→ שלט / שיקוף). מזהה דפדפן טלויזיה (ממליץ, לא מפנה), זוכר את הבחירה האחרונה |
 | טלויזיה / מחשב | `/display` | תצוגה מוקרנת + **מקור האמת** + מריץ את השעון. מציגה את הקוד (+QR) |
 | שלט בנייד | `/remote` | מחזיק טיוטה פרטית, שולח פקודות, משקף מצב. מקליד את הקוד / נכנס עם `?code=` |
+| בונה מערך | `/build` (וגם בתוך `/remote` ו-`/solo`) | קטלוג תיקיות מימין, רכיבי בסיס משמאל, גרירה למרכז; תרגיל בתוך תרגיל; שמירת וריאציות |
 | שיקוף (מכשיר יחיד) | `/solo` | לטלויזיה "טיפשה": הנייד **הוא** המסך (אותו מנוע שעון ואותה `StageView`), לרוחב, שליטה במגע. עריכה פרטית עם "סנכרן לשיקוף" |
 
 הכוונה: טלויזיה חכמה → `/display` + `/remote` (שני מכשירים). טלויזיה "טיפשה" →
@@ -49,6 +50,8 @@ app/
                           NotesModal, AttendanceModal. השעון והתצוגה — ב-lib/
   solo/
     page.js, SoloScreen.jsx   /solo + solo-manifest.json — מצב מכשיר יחיד
+  build/
+    page.js, BuildScreen.jsx  /build — הבונה בעמוד עצמאי (מחשב/טאבלט), המערך נשמר במכשיר
   remote/
     page.js               /remote + manifest נפרד
     RemoteControl.jsx     RemoteControl, SideMenu, ControlTab, WorkoutTab, MoreTab
@@ -78,7 +81,11 @@ app/
     useSound.js           צלילים (WebAudio)
     pairing.jsx           PairOverlay (מסך קבלת הפנים עם הקוד+QR), PairingModal
     qr.js                 מקודד QR ב-JS טהור (byte, ECC M, גרסאות 1–10)
-    EditorModal.jsx, WorkoutModal.jsx, defaults.js   משותפים לטלויזיה ול-/solo
+    EditorModal.jsx, WorkoutModal.jsx, defaults.js   העורך הישן (בטלויזיה), טעינה/שמירת מערכים, נתוני דוגמה
+    steps.js              מודל הצעדים: step / group (תרגיל בתוך תרגיל, עם חזרות), שיטוח לשלבים, עריכות לפי path
+    catalog.js            הקטלוג: תיקיות + תרגילים שמורים; useCatalog + adapter (כרגע localStorage)
+    dnd.jsx               גרירה מבוססת pointer (עכבר/מגע) — data-zone / data-item
+    WorkoutBuilder.jsx    הבונה עצמו (controlled: drills + onChange)
 public/
   manifest.json           PWA לטלויזיה (fullscreen, landscape)
   remote-manifest.json    PWA לשלט (standalone, portrait)
@@ -94,6 +101,19 @@ test/                     ראה "בדיקות" למטה
 
 **חשוב:** `app/lib/` ו-`app/remote/` הם תיקיות רגילות בתוך `app/`. רק קבצי
 `page.js` יוצרים נתיבים, ולכן `app/lib/` לא הופך ל-route.
+
+---
+
+## מודל התרגיל: פרמטרי או בנוי מצעדים
+
+תרגיל ישן הוא פרמטרי (`durationWork`, `rounds`, `pattern`…) ו-`getDrillPhases` מפרק
+אותו לשלבים. תרגיל שנבנה בבונה (`type:"steps"`) מחזיק `steps` — עץ של צעדים וקבוצות
+(`lib/steps.js`) — ו-`getDrillPhases` מקצר אליו (`stepsToPhases`) ומחזיר אותם שלבים בדיוק.
+**מנוע השעון, הטלויזיה והשלט לא יודעים על ההבדל.** קבוצה = "תרגיל בתוך תרגיל" עם `repeat`;
+פריט קטלוג שנגרר לתוך תרגיל נכנס כ-**snapshot** (העתק עם מזהים חדשים), כך שהטלויזיה לא
+צריכה את הקטלוג וכך שעריכת הקטלוג לא משנה אימון קיים. תרגילי steps שומרים גם
+`durationWork`/`rounds:1` כדי שמסכים ישנים לא יציגו "undefined". "פריסט" למתאמן = תיקייה
+בשמו בקטלוג. הקטלוג כרגע ב-`localStorage.judo_catalog_v1` — החלפת האחסון = החלפת `localAdapter`.
 
 ---
 
@@ -272,10 +292,12 @@ Supabase חסום מסביבת ה-agent, ולכן הבדיקות רצות מול
 
 ```
 test/relay.js                    ממסר Phoenix מקומי (דורש: npm i --no-save ws)
-test/e2e-remote.js               36 בדיקות — הקוד (נוצר בטלויזיה, מוקלד בנייד / לינק), טיוטה פרטית, דחיפה, מסך נקי
+test/e2e-remote.js               40 בדיקות — הקוד (נוצר בטלויזיה, מוקלד בנייד / לינק), טיוטה פרטית, דחיפה, מסך נקי
 test/e2e-clock.js                10 בדיקות — דיוק השעון ואיפוס תוך כדי עריכה
 test/e2e-solo.js                 26 בדיקות — /solo: שעון, מחוות, סיבוב, עריכה פרטית + סנכרון, שמירה
 test/e2e-home.js                 13 בדיקות — מסך הכניסה, זיהוי טלויזיה, זיכרון בחירה
+test/e2e-builder.js               23 בדיקות — /build: גרירה מקטלוג/רכיבים, סידור, קבוצות מקוננות, תיקיות ווריאציות, שמירה, והרצה על השעון
+test/steps.test.js               16 בדיקות — מודל הצעדים (שיטוח, קינון, עריכות)
 test/qr.test.js                  9 בדיקות — המקודד מול מפענח עצמאי (דורש: npm i --no-save jsqr)
 test/supabase-realtime-check.html  פותחים בדפדפן — בודק REST + join + round trip
 ```
@@ -287,8 +309,8 @@ npm i --no-save ws jsqr     # פעם אחת — שתי החבילות באותה
 npx next build
 node test/relay.js &                                  # פורט 8899
 npx next start -p 3100 &
-for t in e2e-remote e2e-clock e2e-solo e2e-home; do node test/$t.js; done
-node test/qr.test.js
+for t in e2e-remote e2e-clock e2e-solo e2e-home e2e-builder; do node test/$t.js; done
+node test/qr.test.js; node test/steps.test.js
 ```
 
 **זהירות:** אחרי `next build` חייבים להרוג שרת `next start` ישן — שרת שנשאר
@@ -302,6 +324,24 @@ node test/qr.test.js
 ---
 
 ## מצב נוכחי (7.10.2026)
+
+### 🆕 סבב שני — טלויזיה נקייה, צליל, בלי זוגות, בונה מערך (ענף `claude/adoring-lamport-xcxhi1` אחרי PR #9)
+- **טלויזיה נקייה:** `StageView` מציג רק שעון, שלב נוכחי, מי עובד (כחול/לבן) והבא. אין רשימה/הערות/שמות.
+  סרגל הכלים והכפתורים מסתתרים כשיש שלט מחובר ומופיעים לכמה שניות על נגיעה/עכבר/מקש.
+- **צליל:** אין באנר הפעלה. הטלויזיה נפתחת תמיד על **שער התחלה** (`StartGate` ב-`lib/pairing.jsx`) —
+  לחיצה אחת (OK בשלט הטלויזיה) פותחת AudioContext + מסך מלא; הוא מציג קוד+QR עד שיש שלט.
+  אי אפשר להבטיח צליל בלי לחיצה אחת — זו מגבלת דפדפן, לא של הקוד.
+- **בלי זוגות:** הוסרו מהעורך, ה-state והפרוטוקול (שמירה ב-Supabase עדיין שולחת `pairs:[]`).
+  רשימת המתאמנים (`judokas`) נשארת בנתונים אך לא מוצגת באימון.
+- **בונה מערך** (`lib/WorkoutBuilder.jsx`): קטלוג מימין, רכיבי בסיס משמאל, גרירה למרכז,
+  תרגיל בתוך תרגיל, תיקיות בשם חופשי, וריאציות, שמירה בקטלוג. בטלפון צר — מגירות + כפתורי ＋.
+  נפתח מ-`/remote` (טאב "מערך"), מ-`/solo` (עריכה) ומ-`/build`.
+- **עוד לא נעשה (מחכה להחלטות/סכימה):**
+  1. **כניסה עם שם משתמש + סיסמה** (בלי מייל): בפועל מייל סינתטי `<user>@judo.local` מעל Supabase Auth,
+     ותפקידים — מנהל רשת / מנהל מועדון / מאמן, קבוצות בתוך מועדון. תלוי בסכימת ה-DB (ראו "🔴 באמצע חקירה").
+  2. **הקטלוג ב-Supabase** (לפי חשבון/מועדון/קבוצה) במקום `localStorage`.
+  3. שמות מתאמנים רק כשיבנו מועדונים (מחוץ לאימון עצמו).
+  4. הבונה במגע אמיתי (נבדק רק עם עכבר) ובטלפון אמיתי.
 
 ### ✅ הקרנה, חיבור ותצוגה נגישה — יושם (ענף `claude/adoring-lamport-xcxhi1`)
 לפי `docs/projection-plan.md`, 94 בדיקות עוברות (36+10+26+13+9):
