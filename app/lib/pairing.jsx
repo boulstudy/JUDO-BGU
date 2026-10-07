@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { Toggle } from "./ui";
+import { encodeQR } from "./qr";
 
 const ORANGE = "#FF6B00";
 
@@ -14,13 +15,31 @@ function useOrigin() {
   return origin;
 }
 
+// The pairing link as a QR code: the phone camera opens it and joins with no typing.
+function PairQR({ code, size }) {
+  const [matrix, setMatrix] = useState(null);
+  useEffect(() => {
+    try { setMatrix(encodeQR(window.location.origin + "/remote?code=" + code)); } catch(e) { setMatrix(null); }
+  }, [code]);
+  if (!matrix) return null;
+  const quiet = 3, n = matrix.length + quiet * 2;
+  let d = "";
+  matrix.forEach((row, y) => row.forEach((dark, x) => { if (dark) d += `M${x + quiet} ${y + quiet}h1v1h-1z`; }));
+  return (
+    <svg role="img" aria-label="קוד QR לחיבור השלט" viewBox={`0 0 ${n} ${n}`} shapeRendering="crispEdges"
+      style={{ width: size, height: size, flexShrink: 0, borderRadius: 12, background: "#fff", display: "block" }}>
+      <path d={d} fill="#000" />
+    </svg>
+  );
+}
+
 function Steps({ host, big }) {
   const fs = big ? "calc(var(--u,1vh) * 3.2)" : 15;
   return (
     <ol style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: big ? "calc(var(--u,1vh) * 1.4)" : 8, color: "#dfe4ee", fontSize: fs, lineHeight: 1.5, textAlign: "start" }}>
-      <li>1. בנייד פותחים <b style={{ color: "#6ec6ff", direction: "ltr", unicodeBidi: "embed" }}>{host}/remote</b></li>
-      <li>2. מקלידים את הקוד שלמעלה</li>
-      <li>3. השלט מתחבר לבד, ובפעם הבאה לא צריך להקליד שוב</li>
+      <li>1. סורקים את ה-QR במצלמה של הנייד — והשלט מתחבר</li>
+      <li>2. או פותחים בנייד <b style={{ color: "#6ec6ff", direction: "ltr", unicodeBidi: "embed" }}>{host}/remote</b> ומקלידים את הקוד</li>
+      <li>3. בפעם הבאה הוא יתחבר לבד</li>
     </ol>
   );
 }
@@ -29,7 +48,7 @@ function Code({ code, big }) {
   return (
     <div aria-label={"קוד חיבור " + code.split("").join(" ")} style={{
       fontFamily: "Oswald,sans-serif", color: ORANGE, direction: "ltr", lineHeight: 1,
-      fontSize: big ? "calc(var(--u,1vh) * 20)" : 56, letterSpacing: big ? "0.18em" : 14,
+      fontSize: big ? "calc(var(--u,1vh) * 17)" : 48, letterSpacing: big ? "0.18em" : 14,
       textShadow: "0 0 40px rgba(255,107,0,0.35)",
     }}>{code}</div>
   );
@@ -40,13 +59,16 @@ export function PairOverlay({ roomCode, onSkip }) {
   const host = useOrigin();
   return (
     <div role="dialog" aria-label="חיבור שלט" style={{
-      position: "fixed", inset: 0, zIndex: 150, background: "rgba(8,10,16,0.97)", direction: "rtl",
+      position: "fixed", inset: 0, zIndex: 150, background: "rgba(8,10,16,0.99)", direction: "rtl",
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "calc(var(--u,1vh) * 3)",
       fontFamily: "Heebo,sans-serif", color: "#fff", padding: 24, textAlign: "center",
     }}>
       <div style={{ fontSize: "calc(var(--u,1vh) * 5.5)", fontWeight: 900 }}>🥋 נבחרת ג׳ודו BGU</div>
       <div style={{ fontSize: "calc(var(--u,1vh) * 3.6)", fontWeight: 700, color: "#c3cada" }}>חברו את הנייד כשלט</div>
-      <Code code={roomCode} big />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "calc(var(--u,1vh) * 6)", flexWrap: "wrap" }}>
+        <PairQR code={roomCode} size="calc(var(--u,1vh) * 30)" />
+        <Code code={roomCode} big />
+      </div>
       <Steps host={host} big />
       <button autoFocus onClick={onSkip} style={{
         marginTop: "calc(var(--u,1vh) * 1.5)", padding: "calc(var(--u,1vh) * 2) calc(var(--u,1vh) * 5)",
@@ -82,6 +104,7 @@ export function PairingModal({ roomCode, remoteOn, setRemoteOn, onNewCode, statu
             </div>
             <div style={{ background: "rgba(255,107,0,0.07)", border: "1px solid rgba(255,107,0,0.3)", borderRadius: 14, padding: 18, textAlign: "center", marginBottom: 16 }}>
               <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 13, letterSpacing: 3, marginBottom: 8 }}>קוד חיבור</div>
+              <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}><PairQR code={roomCode} size={170} /></div>
               <Code code={roomCode} />
             </div>
             <Steps host={host} />

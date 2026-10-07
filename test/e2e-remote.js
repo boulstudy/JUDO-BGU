@@ -73,6 +73,7 @@ const tvHasText = (tv, t) => tv.evaluate(s => document.body.innerText.includes(s
   await sleep(3000);
   check('TV shows the code on a welcome screen when nobody is connected', await tvHasText(tv, code) && await tvHasText(tv, 'המשך בלי שלט'));
   check('the welcome screen tells the phone where to go', await tv.evaluate(() => /\/remote/.test(document.body.innerText)));
+  check('the welcome screen carries a QR code for the pairing link', (await tv.locator('svg[aria-label="קוד QR לחיבור השלט"]').count()) === 1);
   check('nothing has to be typed on the TV', (await tv.locator('input[placeholder="A7K2"]').count()) === 0);
 
   await phone.goto(APP + '/remote', { waitUntil: 'networkidle' });
