@@ -5,12 +5,13 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   supa,
   DRILL_SECTIONS, SEC_COLOR,
-  fmt, getDrillPhases, totalDrillTime, drillClockSignature,
+  fmt, getDrillPhases, totalDrillTime,
 } from "./lib/shared";
 import { DrillForm, Toggle } from "./lib/ui";
 import { useTvLink } from "./lib/link";
 import { normalizeRoomCode } from "./lib/remoteBus";
 import { COMMANDS, pickPatch } from "./lib/remoteProtocol";
+import { useWorkoutClock } from "./lib/clock";
 
 const INIT_JUDOKAS = [
   { id:1, name:"יואב כ׳",  color:"white", personalDrills:[{id:101,name:"נאגה גדן שמאל",duration:180},{id:102,name:"אוצ׳י גארי",duration:120}]},
@@ -28,120 +29,6 @@ const INIT_DRILLS = [
   { id:4, name:"ראנדורי עמידה", section:"randori",   durationWork:300, durationRest:60, rounds:3, pattern:"together",  restTiming:"after_round", activeColor:"both",  type:"partner",  note:"50% עוצמה",                autoNext:false },
   { id:5, name:"עבודה אישית",   section:"mixed",     durationWork:300, durationRest:0,  rounds:1, pattern:"together",  restTiming:"none",        activeColor:"both",  type:"personal", note:"כל אחד על התרגיל שלו",    autoNext:false },
 ];
-
-// ── Sound — Flex Timer / GymNext style (client-only) ─────────────────────────
-// soundType: "beep" | "buzz" | "mute"
-function useSound(soundType) {
-  const ctxRef = useRef(null);
-
-  // Must be called directly inside a user gesture (tap/click) to work on iOS
-  const initCtx = useCallback(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      if (!ctxRef.current) {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (!AC) return null;
-        ctxRef.current = new AC();
-      }
-      if (ctxRef.current.state === "suspended") {
-        ctxRef.current.resume();
-      }
-      return ctxRef.current;
-    } catch(e) { return null; }
-  }, []);
-
-  const getCtx = useCallback(() => {
-    if (!ctxRef.current) return null;
-    if (ctxRef.current.state === "suspended") ctxRef.current.resume();
-    return ctxRef.current;
-  }, []);
-
-  // Sharp electronic beep — Flex Timer style
-  // Uses sine + slight distortion via gain clipping for that crisp gym-timer sound
-  const playBeep = useCallback((freq, dur, vol, offset) => {
-    try {
-      const ctx = getCtx();
-      if (!ctx) return;
-      const t = ctx.currentTime + (offset || 0);
-
-      // Primary tone
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.type = "sine";
-      osc.frequency.value = freq;
-      // Hard attack, flat sustain, fast release — gym timer character
-      gain.gain.setValueAtTime(0, t);
-      gain.gain.linearRampToValueAtTime(vol, t + 0.004);
-      gain.gain.setValueAtTime(vol, t + dur - 0.015);
-      gain.gain.linearRampToValueAtTime(0, t + dur);
-      osc.start(t); osc.stop(t + dur + 0.02);
-
-      // Click transient at attack — makes it feel punchy
-      const click = ctx.createOscillator();
-      const clickGain = ctx.createGain();
-      click.connect(clickGain); clickGain.connect(ctx.destination);
-      click.type = "square";
-      click.frequency.value = freq * 1.5;
-      clickGain.gain.setValueAtTime(vol * 0.25, t);
-      clickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.018);
-      click.start(t); click.stop(t + 0.02);
-    } catch(e) {}
-  }, [getCtx]);
-
-  // Buzz — lower, more aggressive sound for rest end
-  const playBuzz = useCallback((freq, dur, vol, offset) => {
-    try {
-      const ctx = getCtx();
-      if (!ctx) return;
-      const t = ctx.currentTime + (offset || 0);
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.type = "sawtooth";
-      osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0, t);
-      gain.gain.linearRampToValueAtTime(vol, t + 0.005);
-      gain.gain.setValueAtTime(vol, t + dur - 0.02);
-      gain.gain.linearRampToValueAtTime(0, t + dur);
-      osc.start(t); osc.stop(t + dur + 0.02);
-    } catch(e) {}
-  }, [getCtx]);
-
-  // Interval-Timer style countdown: 3 short sharp beeps at t=3,2,1
-  const tickBeep = useCallback((t) => {
-    if (soundType === "mute") return;
-    if (soundType === "buzz") {
-      playBuzz(180, 0.08, 0.3, 0);
-    } else {
-      playBeep(1000, 0.09, 0.5, 0);
-    }
-  }, [soundType, playBeep, playBuzz]);
-
-  // Start-of-time signal — one long beep
-  const startBeep = useCallback(() => {
-    if (soundType === "mute") return;
-    if (soundType === "buzz") {
-      playBuzz(150, 0.7, 0.5, 0);
-    } else {
-      playBeep(800, 0.75, 0.65, 0);
-    }
-  }, [soundType, playBeep, playBuzz]);
-
-  // End-of-time signal — two short beeps fired together, right after the 3 countdown beeps
-  const endBeep = useCallback(() => {
-    if (soundType === "mute") return;
-    if (soundType === "buzz") {
-      playBuzz(180, 0.08, 0.3, 0);
-      playBuzz(180, 0.32, 0.3, 0.16);
-    } else {
-      playBeep(1000, 0.09, 0.5, 0);
-      playBeep(1000, 0.32, 0.5, 0.16);
-    }
-  }, [soundType, playBeep, playBuzz]);
-
-  return { tickBeep, endBeep, startBeep, initCtx };
-}
 
 // ── Editor Modal ──────────────────────────────────────────────────────────────
 function EditorModal({ drills, setDrills, currentIndex, judokas, setJudokas, pairs, setPairs, onClose }) {
@@ -587,13 +474,6 @@ export default function JudoTV() {
   const [drills,  setDrills]  = useState(INIT_DRILLS);
   const [judokas, setJudokas] = useState(INIT_JUDOKAS);
   const [pairs,   setPairs]   = useState(INIT_PAIRS);
-  const [drillIdx,  setDrillIdx]  = useState(0);
-  const [phaseIdx,  setPhaseIdx]  = useState(0);
-  const [timeLeft,  setTimeLeft]  = useState(INIT_DRILLS[0].durationWork);
-  const [running,   setRunning]   = useState(false);
-  const [totalElapsed, setTotalElapsed] = useState(0);
-  const [alertActive,  setAlertActive]  = useState(false);
-  const [personalTimers, setPersonalTimers] = useState({});
   const [modal,  setModal]  = useState(null);
   const [globalAutoNext, setGlobalAutoNext] = useState(true);
   const [leftW,  setLeftW]  = useState(220);
@@ -610,17 +490,14 @@ export default function JudoTV() {
   const [projection,  setProjection]  = useState(false); // clean screen: hide the controls
   const [audioReady,  setAudioReady]  = useState(false);
 
-  const intervalRef = useRef(null);
-  const alertRef    = useRef(null);
-  const { tickBeep, endBeep, startBeep, initCtx } = useSound(soundType);
+  const {
+    drillIdx, setDrillIdx, phaseIdx, setPhaseIdx, timeLeft, setTimeLeft,
+    running, setRunning, totalElapsed, alertActive, personalTimers,
+    current, phases, phase, isPersonal, isRest, isPartner, isRestPhase,
+    goToDrill, addTime, resetPhase, nextPhaseManual,
+    startPlaying, toggleRunning, applyClock, initCtx,
+  } = useWorkoutClock({ drills, judokas, globalAutoNext, soundType });
 
-  const current    = drills[drillIdx] || drills[0];
-  const phases     = getDrillPhases(current);
-  const phase      = phases[phaseIdx] || { phase:"work", who:"both", duration:60, label:"עבודה" };
-  const isPersonal = current && current.type === "personal";
-  const isRest     = current && current.type === "rest";
-  const isPartner  = current && current.type === "partner";
-  const isRestPhase = phase.phase === "rest";
 
   // Load last workout on first open
   useEffect(() => {
@@ -633,131 +510,6 @@ export default function JudoTV() {
       }
     });
   }, []);
-
-  // Reset the clock when the drill — or its phase layout — actually changed.
-  // Renaming a drill or editing a later one from the remote must not knock the
-  // running clock back to the start.
-  const clockSigRef      = useRef(null);
-  const clockOverrideRef = useRef(null);
-  const [clockApplyTick, setClockApplyTick] = useState(0);
-
-  useEffect(() => {
-    const d = drills[drillIdx];
-    if (!d) return;
-    const sig = drillClockSignature(d);
-    if (clockSigRef.current === sig) return;
-    clockSigRef.current = sig;
-    const ph = getDrillPhases(d);
-    setPhaseIdx(0);
-    setTimeLeft(ph[0] ? ph[0].duration : 60);
-    setAlertActive(false);
-  }, [drillIdx, drills]);
-
-  // Declared after the reset effect on purpose: a clock position pushed from the
-  // remote has to win over that reset when both land in the same commit.
-  useEffect(() => {
-    const o = clockOverrideRef.current;
-    if (!o) return;
-    clockOverrideRef.current = null;
-    if (o.phaseIdx !== undefined) setPhaseIdx(o.phaseIdx);
-    if (o.timeLeft !== undefined) setTimeLeft(o.timeLeft);
-    setAlertActive(false);
-  }, [clockApplyTick]);
-
-  useEffect(() => {
-    if (isPersonal) {
-      const init = {};
-      judokas.forEach(j => {
-        init[j.id] = { drillIdx:0, timeLeft:(j.personalDrills&&j.personalDrills[0])?j.personalDrills[0].duration:60 };
-      });
-      setPersonalTimers(init);
-    }
-  }, [drillIdx, isPersonal, judokas]);
-
-  const triggerAlert = useCallback(() => {
-    setAlertActive(true);
-    endBeep();
-    clearTimeout(alertRef.current);
-    alertRef.current = setTimeout(() => setAlertActive(false), 2500);
-  }, [endBeep]);
-
-  const advancePhase = useCallback(() => {
-    setPhaseIdx(pi => {
-      const nextPi = pi + 1;
-      if (nextPi < phases.length) {
-        setTimeLeft(phases[nextPi].duration);
-        triggerAlert();
-        return nextPi;
-      }
-      triggerAlert();
-      const shouldAutoNext = globalAutoNext && current && current.autoNext;
-      if (shouldAutoNext) {
-        setDrillIdx(di => {
-          const nextDi = di + 1;
-          if (nextDi < drills.length) return nextDi;
-          setRunning(false);
-          return di;
-        });
-      } else {
-        setRunning(false);
-        setTimeLeft(0);
-      }
-      return pi;
-    });
-  }, [phases, triggerAlert, globalAutoNext, current, drills]);
-
-  // The ticker reads everything it needs through a ref. Depending on those
-  // values directly would tear down and restart the interval on every render —
-  // and since the remote link re-renders the page between ticks, that used to
-  // push the next tick a further second away and run the clock slow.
-  const tickCtxRef = useRef(null);
-  tickCtxRef.current = { advancePhase, tickBeep, isPersonal, judokas };
-
-  useEffect(() => {
-    if (!running) { clearInterval(intervalRef.current); return; }
-    intervalRef.current = setInterval(() => {
-      const { advancePhase, tickBeep, isPersonal, judokas } = tickCtxRef.current;
-      setTimeLeft(t => {
-        if (t <= 3 && t > 0) tickBeep(t);
-        if (t <= 1) { advancePhase(); return 0; }
-        return t - 1;
-      });
-      setTotalElapsed(e => e + 1);
-      if (isPersonal) {
-        setPersonalTimers(prev => {
-          const next = {...prev};
-          judokas.forEach(j => {
-            const pt = next[j.id]; if(!pt) return;
-            if (pt.timeLeft <= 1) {
-              const ni = pt.drillIdx + 1;
-              const nd = j.personalDrills && j.personalDrills[ni];
-              next[j.id] = nd ? {drillIdx:ni,timeLeft:nd.duration} : {drillIdx:pt.drillIdx,timeLeft:0};
-            } else {
-              next[j.id] = {...pt,timeLeft:pt.timeLeft-1};
-            }
-          });
-          return next;
-        });
-      }
-    }, 1000);
-    return () => clearInterval(intervalRef.current);
-  }, [running]);
-
-  const goToDrill = useCallback(i => {
-    if (i >= 0 && i < drills.length) { setDrillIdx(i); setRunning(false); }
-  }, [drills.length]);
-
-  const addTime = s => setTimeLeft(t => Math.max(0, t+s));
-  const resetPhase = () => { setTimeLeft(phase.duration); setAlertActive(false); };
-  const nextPhaseManual = () => {
-    const nextPi = phaseIdx + 1;
-    if (nextPi < phases.length) { setPhaseIdx(nextPi); setTimeLeft(phases[nextPi].duration); }
-    else goToDrill(drillIdx + 1);
-  };
-
-  const startPlaying = useCallback(() => {
-    setRunning(r => { if (!r) startBeep(); return true; });
-  }, [startBeep]);
 
   // The browser only lets us open an AudioContext from inside a real tap, so a
   // play command arriving from the phone cannot unlock it. Track whether the TV
@@ -808,7 +560,7 @@ export default function JudoTV() {
     switch (m.c) {
       case COMMANDS.PLAY:  startPlaying(); break;
       case COMMANDS.PAUSE: setRunning(false); break;
-      case COMMANDS.RESET: setTimeLeft(phase.duration); setAlertActive(false); break;
+      case COMMANDS.RESET: resetPhase(); break;
       case COMMANDS.NEXT_PHASE: nextPhaseManual(); break;
       case COMMANDS.PREV_DRILL: goToDrill(drillIdx - 1); break;
       case COMMANDS.NEXT_DRILL: goToDrill(drillIdx + 1); break;
@@ -817,10 +569,9 @@ export default function JudoTV() {
         const di = Math.max(0, Math.min(Number(m.drillIdx) || 0, drills.length - 1));
         const ph = getDrillPhases(drills[di]);
         const pi = Math.max(0, Math.min(Number(m.phaseIdx) || 0, Math.max(0, ph.length - 1)));
-        clockOverrideRef.current = { phaseIdx: pi, timeLeft: ph[pi] ? ph[pi].duration : 60 };
         setDrillIdx(di);
         setRunning(false);
-        setClockApplyTick(t => t + 1);
+        applyClock({ phaseIdx: pi, timeLeft: ph[pi] ? ph[pi].duration : 60 });
         break;
       }
       default: break;
@@ -857,13 +608,12 @@ export default function JudoTV() {
       override.timeLeft = ph[override.phaseIdx] ? ph[override.phaseIdx].duration : 60;
     }
     if (override.phaseIdx !== undefined || override.timeLeft !== undefined) {
-      clockOverrideRef.current = override;
-      setClockApplyTick(t => t + 1);
+      applyClock(override);
     }
 
     if (then === "play")       startPlaying();
     else if (then === "pause") setRunning(false);
-  }, [drills, drillIdx, startPlaying]);
+  }, [drills, drillIdx, startPlaying, applyClock]);
 
   const tvLink = useTvLink({
     room: roomCode,
@@ -1075,7 +825,7 @@ export default function JudoTV() {
 
           <div style={{display:"flex",gap:9,justifyContent:"center",flexWrap:"wrap"}}>
             <button onClick={() => goToDrill(drillIdx-1)} disabled={drillIdx===0} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:drillIdx===0?"rgba(255,255,255,0.1)":"#fff",borderRadius:11,padding:"13px 20px",cursor:drillIdx===0?"not-allowed":"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:17}}>קודם</button>
-            <button onClick={() => { unlockAudio(); setRunning(r => { const next = !r; if (next) startBeep(); return next; }); }} style={{background:running?"linear-gradient(135deg,#ff4444,#a82020)":"linear-gradient(135deg,#2ecc71,#1f9c54)",border:"none",color:"#fff",borderRadius:13,padding:"13px 48px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:900,fontSize:21,boxShadow:running?"0 5px 22px rgba(255,68,68,0.38)":"0 5px 22px rgba(46,204,113,0.38)",minWidth:150}}>{running?"⏸ עצור":"▶ הפעל"}</button>
+            <button onClick={() => { unlockAudio(); toggleRunning(); }} style={{background:running?"linear-gradient(135deg,#ff4444,#a82020)":"linear-gradient(135deg,#2ecc71,#1f9c54)",border:"none",color:"#fff",borderRadius:13,padding:"13px 48px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:900,fontSize:21,boxShadow:running?"0 5px 22px rgba(255,68,68,0.38)":"0 5px 22px rgba(46,204,113,0.38)",minWidth:150}}>{running?"⏸ עצור":"▶ הפעל"}</button>
             <button onClick={nextPhaseManual} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:"#fff",borderRadius:11,padding:"13px 20px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:17}}>הבא</button>
           </div>
           </>
