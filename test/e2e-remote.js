@@ -62,34 +62,39 @@ const tvHasText = (tv, t) => tv.evaluate(s => document.body.innerText.includes(s
   const phoneErrors = [];
   phone.on('pageerror', e => phoneErrors.push('PHONE: ' + e.message));
 
-  // The code is created on the phone, not the TV.
+  // The TV owns the code and shows it; the phone only types it.
   await tv.goto(APP + '/display', { waitUntil: 'networkidle' });
   await sleep(1200);
 
-  check('TV has no room code before anything is typed in',
-    !(await tv.evaluate(() => window.localStorage.getItem('judo_room'))));
+  const code = await tv.evaluate(() => window.localStorage.getItem('judo_room'));
+  check('TV creates its own room code', !!code && code.length === 4, code);
+  check('the welcome screen is held back at first (a remembered phone should not see it flash)',
+    !(await tvHasText(tv, 'המשך בלי שלט')));
+  await sleep(3000);
+  check('TV shows the code on a welcome screen when nobody is connected', await tvHasText(tv, code) && await tvHasText(tv, 'המשך בלי שלט'));
+  check('the welcome screen tells the phone where to go', await tv.evaluate(() => /\/remote/.test(document.body.innerText)));
+  check('nothing has to be typed on the TV', (await tv.locator('input[placeholder="A7K2"]').count()) === 0);
 
   await phone.goto(APP + '/remote', { waitUntil: 'networkidle' });
   await sleep(800);
-  const code = await phone.evaluate(() => window.localStorage.getItem('judo_remote_room'));
-  check('phone generated a room code', !!code && code.length === 4, code);
-  check('the phone shows the code to type into the TV', await phone.evaluate(c => document.body.innerText.includes(c), code));
+  check('phone asks for the code instead of inventing one',
+    (await phone.locator('#room-code').count()) === 1 && !(await phone.evaluate(() => window.localStorage.getItem('judo_remote_room'))));
+  check('phone offers the single-device mirror mode', await phone.evaluate(() => !!document.querySelector('a[href="/solo"]')));
+
+  await phone.locator('#room-code').fill(code);
+  await phone.getByRole('button', { name: 'התחבר', exact: true }).click();
+  await sleep(1500);
+  check('TV announces the connection', await tvHasText(tv, 'שלט התחבר'));
+  check('welcome screen closes once the phone is connected', !(await tvHasText(tv, 'המשך בלי שלט')));
+  await sleep(2500);
+  check('phone moved on from the code screen once the TV connected',
+    !(await phone.evaluate(() => document.body.innerText.includes('מתחבר למסך'))));
 
   await tv.getByTitle('חיבור שלט רחוק בנייד').click();
-  await sleep(700);
-  check('the pairing window links to the mobile interface',
-    await tv.evaluate(() => !!document.querySelector('a[href$="/remote"]')));
-
-  // Type the phone's code into the TV — this is the only way the two pair up.
-  await tv.locator('input[placeholder="A7K2"]').fill(code);
-  await tv.getByRole('button', { name: 'התחבר' }).click();
-  await sleep(700);
-  check('pairing window shows the connected code', await tvHasText(tv, code));
-
-  await sleep(4500);
-  check('pairing window closes itself once the remote connects', !(await tvHasText(tv, code)));
-  check('phone moved on from the pairing screen once the TV connected',
-    !(await phone.evaluate(() => document.body.innerText.includes('הקלידו את הקוד הזה'))));
+  await sleep(500);
+  check('the pairing window shows the connected code', await tvHasText(tv, code) && await tvHasText(tv, 'השלט מחובר'));
+  await tv.getByRole('button', { name: 'סגור' }).click();
+  await sleep(300);
 
   check('phone reports it is connected to the screen', await phone.evaluate(() => document.body.innerText.includes('מחובר למסך')));
   check('phone mirrors the current drill name', await phone.evaluate(() => document.body.innerText.includes('חימום כללי')));
@@ -182,11 +187,20 @@ const tvHasText = (tv, t) => tv.evaluate(s => document.body.innerText.includes(s
   await phone.reload({ waitUntil: 'networkidle' });
   await sleep(500);
   check('a returning phone skips the pairing screen',
-    !(await phone.evaluate(() => document.body.innerText.includes('הקלידו את הקוד הזה'))));
+    !(await phone.evaluate(() => document.body.innerText.includes('מתחבר למסך'))));
 
   await sleep(3000);
   check('phone reconnects after a reload', await phone.evaluate(() => document.body.innerText.includes('מחובר למסך')));
   check('phone re-syncs the renamed drill', await phone.evaluate(() => document.body.innerText.includes('ראנדורי נבחרת')));
+
+  // Opening a link that carries the code needs no typing at all.
+  const phone2Ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await phone2Ctx.addInitScript(redirect);
+  const phone2 = await phone2Ctx.newPage();
+  await phone2.goto(APP + '/remote?code=' + code, { waitUntil: 'networkidle' });
+  await sleep(4000);
+  check('a link carrying the code connects without typing', await phone2.evaluate(() => document.body.innerText.includes('מחובר למסך')));
+  check('the link stored the code for next time', (await phone2.evaluate(() => window.localStorage.getItem('judo_remote_room'))) === code);
 
   check('no runtime errors on the TV', tvErrors.length === 0, tvErrors.join(' | '));
   check('no runtime errors on the phone', phoneErrors.length === 0, phoneErrors.join(' | '));
