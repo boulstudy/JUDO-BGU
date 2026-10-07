@@ -35,7 +35,7 @@ const PATCH_LABELS = {
   phaseIdx: "שלב נוכחי",
   globalAutoNext: "מעבר אוטומטי",
   soundType: "צליל",
-  projection: "מצב הקרנה",
+  projection: "מסך נקי",
 };
 
 const card = {
@@ -650,7 +650,7 @@ function MoreTab({ view, stage, workouts, setWorkouts, room, onDisconnect }) {
       <div style={card}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
           <div style={{minWidth:0,marginInlineEnd:10}}>
-            <div style={{fontSize:15}}>📺 מצב הקרנה</div>
+            <div style={{fontSize:15}}>🧼 מסך נקי</div>
             <div style={{color:"rgba(255,255,255,0.3)",fontSize:12,marginTop:2}}>מסתיר את כפתורי השליטה מהמסך</div>
           </div>
           <Toggle value={view.projection} onChange={v => stage({ projection: v })}/>

@@ -96,7 +96,7 @@ const drillName = tv => tv.evaluate(() => (document.querySelector('h1') || {}).t
     afterPush !== null && afterPush < beforePush && beforePush - afterPush <= 4,
     beforePush + 's → ' + afterPush + 's');
   check('TV is still on the same drill', (await drillName(tv)) === 'חימום כללי', await drillName(tv));
-  check('TV is still running', await tv.evaluate(() => document.body.innerText.includes('⏸ עצור')));
+  check('TV is still running', await tv.evaluate(() => !document.body.innerText.includes('מושהה')));
 
   const t1 = await clockSecs(tv);
   await sleep(2500);

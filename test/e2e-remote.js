@@ -160,14 +160,17 @@ const tvHasText = (tv, t) => tv.evaluate(s => document.body.innerText.includes(s
   await sleep(300);
   await phone.getByRole('button', { name: 'עוד' }).click();
   await sleep(400);
-  check('TV shows its control buttons before projection mode', await tvHasText(tv, '+ 30ש׳'));
+  check('TV hides its control buttons while a phone is connected', !(await tvHasText(tv, '+ 30ש׳')));
+  await tv.mouse.move(300, 300); await tv.mouse.move(420, 380);
+  await sleep(400);
+  check('TV shows its control buttons again on touch / mouse move', await tvHasText(tv, '+ 30ש׳'));
   await phone.locator('div').filter({ hasText: /^מסתיר את כפתורי השליטה מהמסך$/ }).first()
     .locator('xpath=../..').locator('div[style*="border-radius: 12px"]').last().click();
   await sleep(500);
   await phone.getByRole('button', { name: '✓ עדכן טלויזיה' }).click();
   await sleep(1500);
-  check('projection mode hides the TV control buttons', !(await tvHasText(tv, '+ 30ש׳')));
-  check('projection mode keeps the timer on screen', !!(await tvClock(tv)));
+  check('clean screen hides the TV control buttons', !(await tvHasText(tv, '+ 30ש׳')));
+  check('clean screen keeps the timer on screen', !!(await tvClock(tv)));
 
   await tv.screenshot({ path: SHOT + '/tv-projection.png' });
   await phone.screenshot({ path: SHOT + '/phone-more.png' });

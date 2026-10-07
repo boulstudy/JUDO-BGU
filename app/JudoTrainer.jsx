@@ -12,6 +12,7 @@ import { useTvLink } from "./lib/link";
 import { normalizeRoomCode } from "./lib/remoteBus";
 import { COMMANDS, pickPatch } from "./lib/remoteProtocol";
 import { useWorkoutClock } from "./lib/clock";
+import StageView from "./lib/stage";
 
 const INIT_JUDOKAS = [
   { id:1, name:"יואב כ׳",  color:"white", personalDrills:[{id:101,name:"נאגה גדן שמאל",duration:180},{id:102,name:"אוצ׳י גארי",duration:120}]},
@@ -255,65 +256,27 @@ function WorkoutModal({ drills, judokas, pairs, onLoad, onClose }) {
   );
 }
 
-// ── Split Panel ───────────────────────────────────────────────────────────────
-function SplitPanel({ pairs, judokas, who, showNames }) {
-  const wActive = who==="white"||who==="both";
-  const bActive = who==="blue"||who==="both";
-
-  if (!showNames) {
-    return (
-      <div style={{display:"flex",gap:12,height:110,justifyContent:"center"}}>
-        {[["white","לבן",wActive],["blue","כחול",bActive]].map(([color,label,active]) => (
-          <div key={color} style={{
-            flex: active ? 1.4 : 0.6,
-            borderRadius:12,
-            background:active?(color==="white"?"linear-gradient(145deg,#ccc,#fff)":"linear-gradient(145deg,#003b8e,#1a5fd6)"):"rgba(255,255,255,0.025)",
-            border:active?(color==="white"?"2px solid #fff":"2px solid #1a5fd6"):"2px solid rgba(255,255,255,0.04)",
-            display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,
-            transition:"all 0.5s",
-            opacity: active ? 1 : 0.3,
-            filter: active ? "none" : "brightness(0.35)",
-            boxShadow:active?(color==="white"?"0 0 28px rgba(255,255,255,0.18)":"0 0 28px rgba(26,95,214,0.32)"):"none"
-          }}>
-            <span style={{fontSize:active?32:20,transition:"font-size 0.4s"}}>🥋</span>
-            <span style={{color:active?(color==="white"?"#111":"#fff"):"rgba(255,255,255,0.25)",fontWeight:800,fontSize:active?19:13,transition:"all 0.5s"}}>{label}</span>
-            {active && <span style={{fontSize:10,color:color==="white"?"rgba(0,0,0,0.4)":"rgba(255,255,255,0.5)",letterSpacing:2}}>עובד</span>}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
+// ── Notes Modal ───────────────────────────────────────────────────────────────
+// The coach's emphasis for the session. It shows on the stage as read-only
+// "דגשים"; this is where it is typed on the TV itself.
+function NotesModal({ notes, setNotes, onClose }) {
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:7}}>
-      {pairs.map(([wid,bid],pi) => {
-        const w=judokas.find(j=>j.id===wid), b=judokas.find(j=>j.id===bid);
-        return (
-          <div key={pi} style={{display:"flex",gap:7,height:76}}>
-            {[[w,"white",wActive],[b,"blue",bActive]].map(([person,color,active]) => (
-              <div key={color} style={{
-                flex: active ? 1.4 : 0.6,
-                borderRadius:10,
-                background:active?(color==="white"?"linear-gradient(145deg,#ccc,#fff)":"linear-gradient(145deg,#003b8e,#1a5fd6)"):"rgba(255,255,255,0.02)",
-                border:active?(color==="white"?"2px solid #fff":"2px solid #1a5fd6"):"2px solid rgba(255,255,255,0.04)",
-                display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,
-                transition:"all 0.5s",
-                opacity: active ? 1 : 0.3,
-                filter: active ? "none" : "brightness(0.4)",
-                boxShadow:active?(color==="white"?"0 0 18px rgba(255,255,255,0.15)":"0 0 18px rgba(26,95,214,0.28)"):"none"
-              }}>
-                <span style={{fontSize:active?19:14,transition:"font-size 0.4s"}}>🥋</span>
-                <span style={{color:active?(color==="white"?"#111":"#fff"):"rgba(255,255,255,0.2)",fontWeight:800,fontSize:active?15:12,transition:"all 0.5s"}}>{person?person.name:""}</span>
-                {active && <span style={{fontSize:9,color:color==="white"?"rgba(0,0,0,0.38)":"rgba(255,255,255,0.48)",letterSpacing:1}}>עובד</span>}
-              </div>
-            ))}
-          </div>
-        );
-      })}
+    <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",direction:"rtl"}}>
+      <div onClick={e => e.stopPropagation()} style={{width:"min(560px,92vw)",background:"#0d1020",border:"1px solid rgba(255,107,0,0.3)",borderRadius:16,padding:20,fontFamily:"Heebo,sans-serif"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <span style={{color:"#fff",fontWeight:900,fontSize:18}}>📝 דגשים לאימון</span>
+          <button onClick={onClose} aria-label="סגור" style={{background:"none",border:"none",color:"rgba(255,255,255,0.6)",cursor:"pointer",fontSize:22}}>✕</button>
+        </div>
+        <textarea
+          value={notes} onChange={e => setNotes(e.target.value)} autoFocus
+          placeholder={"דגשים שיופיעו על המסך..."}
+          style={{width:"100%",minHeight:180,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:10,color:"#fff",padding:12,fontFamily:"Heebo,sans-serif",fontSize:17,lineHeight:1.6,resize:"vertical",outline:"none",direction:"rtl",boxSizing:"border-box"}}
+        />
+        <button onClick={onClose} style={{width:"100%",marginTop:12,padding:14,fontSize:17,fontWeight:900,borderRadius:11,border:"none",cursor:"pointer",fontFamily:"Heebo,sans-serif",color:"#fff",background:"linear-gradient(135deg,#FF6B00,#cc4400)"}}>סיום</button>
+      </div>
     </div>
   );
 }
-
 
 // ── Attendance Modal ──────────────────────────────────────────────────────────
 function AttendanceModal({ judokas, onClose }) {
@@ -476,13 +439,10 @@ export default function JudoTV() {
   const [pairs,   setPairs]   = useState(INIT_PAIRS);
   const [modal,  setModal]  = useState(null);
   const [globalAutoNext, setGlobalAutoNext] = useState(true);
-  const [leftW,  setLeftW]  = useState(220);
-  const [rightW, setRightW] = useState(240);
   const [soundType, setSoundType] = useState("beep");
   const [scale, setScale] = useState(1.0);
   const [toolbarOpen, setToolbarOpen] = useState(false);
   const [notes, setNotes] = useState("");
-  const [notesOpen, setNotesOpen] = useState(true);
 
   // ── Remote control ──────────────────────────────────────────────────────────
   const [roomCode,    setRoomCode]    = useState("");
@@ -625,43 +585,59 @@ export default function JudoTV() {
     onPatch: handleRemotePatch,
   });
 
-  const pct = timeLeft / (phase.duration || 1);
-  const urgent  = pct < 0.2 || alertActive;
-  const warning = pct < 0.35 && pct >= 0.2;
-  const notStarted = timeLeft === phase.duration;
-  const timerColor = (isRestPhase||isRest) ? "#a8ff78" : alertActive ? "#ff3c3c" : !running ? (notStarted ? "#ffffff" : "#ff4444") : urgent ? "#FF6B00" : warning ? "#ffb347" : "#00ff88";
+  // With a phone connected the controls are redundant on the big screen, so they
+  // hide themselves; any touch, mouse move or key brings them back for a moment.
+  const [peek, setPeek] = useState(false);
+  const peekTimer = useRef(null);
+  const wake = useCallback(() => {
+    setPeek(true);
+    clearTimeout(peekTimer.current);
+    peekTimer.current = setTimeout(() => setPeek(false), 6000);
+  }, []);
+  const showControls = !projection && (!tvLink.remoteConnected || peek);
 
-  const totalDur  = drills.reduce((a,d) => a+totalDrillTime(d), 0);
-  const doneDur   = drills.slice(0,drillIdx).reduce((a,d) => a+totalDrillTime(d), 0);
-  const phaseDone = phases.slice(0,phaseIdx).reduce((a,p) => a+p.duration, 0);
-  const progress  = totalDur > 0 ? Math.min(100, ((doneDur + phaseDone + (phase.duration - timeLeft)) / totalDur) * 100) : 0;
-
-  const nextPhase = phases[phaseIdx + 1];
-  const nextDrill = drills[drillIdx + 1];
-  const secColor  = SEC_COLOR[current ? current.section || "warmup" : "warmup"];
+  // Keyboard / presentation clicker / TV remote arrows. Read through a ref so the
+  // listener is attached once.
+  const keysRef = useRef(null);
+  keysRef.current = { toggleRunning, goToDrill, drillIdx, addTime, unlockAudio, modal, wake };
+  useEffect(() => {
+    const onKey = e => {
+      const k = keysRef.current;
+      k.wake();
+      const t = e.target, tag = t && t.tagName;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON" || tag === "A" || (t && t.getAttribute && t.getAttribute("role") === "button")) return;
+      if (k.modal) return;
+      let used = true;
+      switch (e.key) {
+        case " ": case "Enter": k.unlockAudio(); k.toggleRunning(); break;
+        case "ArrowLeft": case "PageDown": case "n": case "N": k.goToDrill(k.drillIdx + 1); break;
+        case "ArrowRight": case "PageUp": case "p": case "P": k.goToDrill(k.drillIdx - 1); break;
+        case "ArrowUp": k.addTime(10); break;
+        case "ArrowDown": k.addTime(-10); break;
+        case "f": case "F":
+          try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); } catch(err) {}
+          break;
+        default: used = false;
+      }
+      if (used) e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
-    <div style={{width:"100vw",height:"100vh",overflow:"hidden",background:"#080a10",position:"relative"}}>
+    <div onPointerMove={wake} onPointerDown={wake} style={{width:"100vw",height:"100vh",overflow:"hidden",background:"#080a10",position:"relative"}}>
       <div style={{width:"100vw",height:"100vh",display:"flex",flexDirection:"column",direction:"rtl",fontFamily:"Heebo,sans-serif",position:"relative",transform:"scale("+scale+")",transformOrigin:"top right",width:(100/scale)+"%",height:(100/scale)+"%"}}>
       <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;700;900&family=Oswald:wght@700&display=swap" rel="stylesheet"/>
       <style>{`
-        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.28}}
-        @keyframes alertBorder{0%,100%{opacity:0}50%{opacity:1}}
-        @keyframes restGlow{0%,100%{box-shadow:0 0 20px rgba(168,255,120,0.1)}50%{box-shadow:0 0 40px rgba(168,255,120,0.28)}}
         *{box-sizing:border-box;margin:0;padding:0}
+        button:focus-visible,input:focus-visible{outline:3px solid #FF6B00;outline-offset:2px}
       `}</style>
-
-      <div style={{position:"absolute",inset:0,pointerEvents:"none",overflow:"hidden"}}>
-        <div style={{position:"absolute",top:"-20%",right:"-10%",width:"55%",height:"70%",borderRadius:"50%",background:"radial-gradient(circle,rgba(255,107,0,0.045) 0%,transparent 65%)"}}/>
-        <div style={{position:"absolute",bottom:"-20%",left:"-10%",width:"55%",height:"70%",borderRadius:"50%",background:"radial-gradient(circle,rgba(0,59,142,0.06) 0%,transparent 65%)"}}/>
-        <div style={{position:"absolute",inset:0,backgroundImage:"linear-gradient(rgba(255,255,255,0.009) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,0.009) 1px,transparent 1px)",backgroundSize:"80px 80px"}}/>
-      </div>
-
-      {alertActive && <div style={{position:"fixed",inset:0,border:"5px solid rgba(255,60,60,0.7)",pointerEvents:"none",zIndex:50,animation:"alertBorder 0.35s infinite"}}/>}
 
       {/* Audio can only be unlocked by a tap on the TV itself */}
       {!audioReady && remoteOn && (
-        <div onClick={unlockAudio} style={{position:"fixed",bottom:14,left:"50%",transform:"translateX(-50%)",zIndex:120,background:"rgba(255,107,0,0.16)",border:"1px solid rgba(255,107,0,0.5)",color:"#FF6B00",borderRadius:11,padding:"10px 16px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:14,fontWeight:700,direction:"rtl"}}>
+        <div onClick={unlockAudio} style={{position:"fixed",top:14,left:"50%",transform:"translateX(-50%)",zIndex:120,background:"rgba(255,107,0,0.16)",border:"1px solid rgba(255,107,0,0.5)",color:"#FF6B00",borderRadius:11,padding:"10px 16px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:14,fontWeight:700,direction:"rtl"}}>
           🔊 לחצו כאן להפעלת הצלילים במסך
         </div>
       )}
@@ -676,15 +652,7 @@ export default function JudoTV() {
           </div>
         </div>
 
-        <div style={{flex:1,maxWidth:440,margin:"0 28px"}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-            <span style={{color:"rgba(255,255,255,0.22)",fontSize:11}}>התקדמות האימון</span>
-            <span style={{color:"rgba(255,255,255,0.32)",fontFamily:"monospace",fontSize:11}}>{Math.round(progress)}%</span>
-          </div>
-          <div style={{height:5,background:"rgba(255,255,255,0.055)",borderRadius:3,overflow:"hidden"}}>
-            <div style={{height:"100%",width:progress+"%",background:"linear-gradient(90deg,#FF6B00,#ff9233)",borderRadius:3,transition:"width 1s linear"}}/>
-          </div>
-        </div>
+        <div style={{flex:1}}/>
 
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           {remoteOn && (
@@ -707,100 +675,16 @@ export default function JudoTV() {
         </div>
       </div>
 
-      {/* BODY */}
-      <div style={{flex:1,display:"flex",overflow:"hidden",padding:"14px 22px",gap:16,position:"relative",zIndex:1,flexDirection:"row"}}>
+      {/* STAGE — everything the trainees read lives in lib/stage.jsx */}
+      <StageView
+        drills={drills} drillIdx={drillIdx} phaseIdx={phaseIdx} timeLeft={timeLeft}
+        running={running} totalElapsed={totalElapsed} alertActive={alertActive}
+        judokas={judokas} pairs={pairs} notes={notes} personalTimers={personalTimers}
+        onSelectDrill={goToDrill}
+        onSelectPhase={i => { setPhaseIdx(i); setTimeLeft(phases[i].duration); }}
+        controls={showControls ? (
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
 
-        {/* LEFT: Notes panel (collapsible) */}
-        {notesOpen ? (
-          <div style={{width:leftW,display:"flex",flexDirection:"column",flexShrink:0,gap:8,position:"relative",minWidth:140,maxWidth:360}}>
-            <div
-              onMouseDown={e => {
-                const startX = e.clientX, startW = leftW;
-                const move = ev => setLeftW(Math.min(360, Math.max(140, startW + (ev.clientX - startX))));
-                const up = () => { window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up); };
-                window.addEventListener("mousemove",move); window.addEventListener("mouseup",up);
-              }}
-              onTouchStart={e => {
-                const startX = e.touches[0].clientX, startW = leftW;
-                const move = ev => setLeftW(Math.min(360, Math.max(140, startW + (ev.touches[0].clientX - startX))));
-                const up = () => { window.removeEventListener("touchmove",move); window.removeEventListener("touchend",up); };
-                window.addEventListener("touchmove",move,{passive:false}); window.addEventListener("touchend",up);
-              }}
-              style={{position:"absolute",left:-10,top:0,bottom:0,width:20,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none"}}>
-              <div style={{width:3,height:40,borderRadius:2,background:"rgba(255,107,0,0.4)"}}/>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{color:"rgba(255,255,255,0.18)",fontSize:10,letterSpacing:4,textTransform:"uppercase"}}>הערות אימון</span>
-              <button onClick={() => setNotesOpen(false)} style={{background:"none",border:"none",color:"rgba(255,255,255,0.3)",cursor:"pointer",fontSize:18,padding:4,lineHeight:1}}>✕</button>
-            </div>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder={"הערות, דגשים לאימון..."}
-              style={{
-                flex:1,minHeight:220,
-                background:"rgba(255,255,255,0.04)",
-                border:"1px solid rgba(255,255,255,0.08)",
-                borderRadius:10,color:"#fff",
-                padding:"12px",fontFamily:"Heebo,sans-serif",
-                fontSize:14,lineHeight:1.6,
-                resize:"none",outline:"none",direction:"rtl",
-              }}
-            />
-            <div style={{paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.045)",display:"flex",flexDirection:"column",gap:5}}>
-              {[["זמן שעבר",fmt(totalElapsed)],["סה\"כ",fmt(totalDur)]].map(([l,v]) => (
-                <div key={l} style={{display:"flex",justifyContent:"space-between"}}>
-                  <span style={{color:"rgba(255,255,255,0.22)",fontSize:11}}>{l}</span>
-                  <span style={{color:"#fff",fontFamily:"Oswald,sans-serif",fontSize:19}}>{v}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <button onClick={() => setNotesOpen(true)} style={{
-            width:32,flexShrink:0,
-            background:"rgba(255,255,255,0.04)",
-            border:"1px solid rgba(255,255,255,0.08)",
-            borderRadius:10,color:"rgba(255,255,255,0.35)",
-            cursor:"pointer",display:"flex",alignItems:"center",
-            justifyContent:"center",fontFamily:"Heebo,sans-serif",
-            fontSize:11,letterSpacing:2,padding:"12px 0",
-            writingMode:"vertical-rl",
-          }}>📝 הערות</button>
-        )}
-
-        {/* CENTER */}
-        <div style={{flex:1,display:"flex",flexDirection:"column",gap:10,minWidth:0}}>
-          <div style={{display:"flex",alignItems:"baseline",gap:12,flexWrap:"wrap"}}>
-            <div style={{width:5,height:40,borderRadius:3,background:secColor,flexShrink:0,alignSelf:"center"}}/>
-            <h1 style={{color:"#fff",fontSize:"clamp(22px,3.2vw,44px)",fontWeight:900,letterSpacing:-1,lineHeight:1}}>{current?current.name:""}</h1>
-            <span style={{padding:"4px 13px",borderRadius:18,background:(isRestPhase||isRest)?"rgba(168,255,120,0.13)":secColor+"1a",color:(isRestPhase||isRest)?"#a8ff78":secColor,fontSize:14,fontWeight:700,flexShrink:0}}>{isRestPhase||isRest?"מנוחה":phase.label}</span>
-            {current&&current.rounds>1&&!isRestPhase&&<span style={{color:"rgba(255,255,255,0.22)",fontSize:13}}>סבב {phase.round||1}/{current.rounds}</span>}
-            {current&&current.note&&<span style={{color:"rgba(255,255,255,0.28)",fontSize:15}}>{current.note}</span>}
-          </div>
-
-          {phases.length > 1 && (
-            <div style={{display:"flex",gap:4}}>
-              {phases.map((p,i) => (
-                <div key={i} onClick={() => { setPhaseIdx(i); setTimeLeft(p.duration); }} style={{flex:1,height:4,borderRadius:2,cursor:"pointer",background:i<phaseIdx?"rgba(255,107,0,0.45)":i===phaseIdx?"#FF6B00":p.phase==="rest"?"rgba(168,255,120,0.18)":"rgba(255,255,255,0.09)",transition:"background 0.28s"}}/>
-              ))}
-            </div>
-          )}
-
-          <div style={{textAlign:"center",lineHeight:1,animation:alertActive?"pulse 0.35s infinite":"none"}}>
-            <div style={{fontSize:"clamp(88px,15vw,180px)",fontFamily:"Oswald,sans-serif",fontWeight:700,color:timerColor,textShadow:"0 0 55px "+timerColor+"44",transition:"color 0.38s",letterSpacing:-8}}>{fmt(timeLeft)}</div>
-            {alertActive&&<div style={{color:"#ff3c3c",fontSize:22,fontWeight:900,letterSpacing:5,textTransform:"uppercase",animation:"pulse 0.4s infinite",marginTop:4}}>זמן לעבור</div>}
-            {(isRestPhase||isRest)&&!alertActive&&<div style={{color:"#a8ff78",fontSize:18,fontWeight:700,letterSpacing:3,marginTop:4}}>מנוחה</div>}
-          </div>
-
-          {!isPersonal && (
-            <div style={{maxWidth:420,width:"100%",margin:"0 auto"}}>
-              <SplitPanel pairs={pairs} judokas={judokas} who={(isRestPhase||isRest)?"none":phase.who} showNames={false}/>
-            </div>
-          )}
-
-          {!projection && (
-          <>
           <div style={{display:"flex",gap:5,justifyContent:"center",flexWrap:"wrap",alignItems:"center"}}>
             {[[-60,"- דקה"],[-30,"- 30ש׳"],[-10,"- 10ש׳"],[10,"+ 10ש׳"],[30,"+ 30ש׳"],[60,"+ דקה"]].map(([s,l]) => (
               <button key={s} onClick={() => addTime(s)} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:s>0?"rgba(0,229,255,0.72)":"rgba(255,107,0,0.72)",borderRadius:8,padding:"8px 13px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:14,fontWeight:700}}>{l}</button>
@@ -828,63 +712,9 @@ export default function JudoTV() {
             <button onClick={() => { unlockAudio(); toggleRunning(); }} style={{background:running?"linear-gradient(135deg,#ff4444,#a82020)":"linear-gradient(135deg,#2ecc71,#1f9c54)",border:"none",color:"#fff",borderRadius:13,padding:"13px 48px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:900,fontSize:21,boxShadow:running?"0 5px 22px rgba(255,68,68,0.38)":"0 5px 22px rgba(46,204,113,0.38)",minWidth:150}}>{running?"⏸ עצור":"▶ הפעל"}</button>
             <button onClick={nextPhaseManual} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",color:"#fff",borderRadius:11,padding:"13px 20px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontWeight:700,fontSize:17}}>הבא</button>
           </div>
-          </>
-          )}
-
-          <div style={{textAlign:"center",color:"rgba(255,255,255,0.17)",fontSize:13,minHeight:20}}>
-            {nextPhase ? "הבא: "+nextPhase.label+" "+fmt(nextPhase.duration) : nextDrill ? "תרגיל הבא: "+nextDrill.name : ""}
-          </div>
-
-        </div>
-
-        {/* RIGHT: drill list */}
-        <div style={{width:rightW,display:"flex",flexDirection:"column",flexShrink:0,position:"relative",minWidth:180,maxWidth:500}}>
-          <div
-            onMouseDown={e => {
-              const startX = e.clientX, startW = rightW;
-              const move = ev => setRightW(Math.min(500, Math.max(180, startW - (ev.clientX - startX))));
-              const up = () => { window.removeEventListener("mousemove",move); window.removeEventListener("mouseup",up); };
-              window.addEventListener("mousemove",move); window.addEventListener("mouseup",up);
-            }}
-            onTouchStart={e => {
-              const startX = e.touches[0].clientX, startW = rightW;
-              const move = ev => setRightW(Math.min(500, Math.max(180, startW - (ev.touches[0].clientX - startX))));
-              const up = () => { window.removeEventListener("touchmove",move); window.removeEventListener("touchend",up); };
-              window.addEventListener("touchmove",move,{passive:false}); window.addEventListener("touchend",up);
-            }}
-            style={{position:"absolute",right:-10,top:0,bottom:0,width:20,cursor:"col-resize",zIndex:10,display:"flex",alignItems:"center",justifyContent:"center",touchAction:"none"}}>
-            <div style={{width:3,height:40,borderRadius:2,background:"rgba(255,107,0,0.4)"}}/>
-          </div>
-          <div style={{color:"rgba(255,255,255,0.18)",fontSize:10,letterSpacing:4,textTransform:"uppercase",marginBottom:9}}>מערך האימון</div>
-          <div style={{flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:3}}>
-            {drills.map((d,i) => {
-              const done=i<drillIdx, curr=i===drillIdx;
-              const sc=SEC_COLOR[d.section||"warmup"];
-              return (
-                <div key={d.id} onClick={() => goToDrill(i)} style={{background:curr?"rgba(255,107,0,0.11)":done?"rgba(255,255,255,0.01)":"rgba(255,255,255,0.03)",border:curr?"1px solid rgba(255,107,0,0.45)":"1px solid rgba(255,255,255,0.045)",borderRadius:9,padding:"8px 11px",cursor:"pointer",display:"flex",alignItems:"center",gap:7,opacity:done?0.33:1,transition:"all 0.18s"}}>
-                  <div style={{width:3,height:28,borderRadius:2,background:sc,flexShrink:0}}/>
-                  <span style={{width:20,height:20,borderRadius:"50%",background:curr?"#FF6B00":"rgba(255,255,255,0.045)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:curr?"#fff":"rgba(255,255,255,0.28)",flexShrink:0}}>{done?"✓":i+1}</span>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:curr?"#fff":"rgba(255,255,255,0.52)",fontSize:13,fontWeight:curr?700:400,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.name}</div>
-                    <div style={{color:sc,fontSize:10,marginTop:1}}>{d.type!=="rest"?d.rounds+"x · ":""}{fmt(totalDrillTime(d))}</div>
-                  </div>
-                  {curr&&running&&<div style={{width:5,height:5,borderRadius:"50%",background:"#FF6B00",animation:"pulse 0.9s infinite",flexShrink:0}}/>}
-                  {d.autoNext&&<div style={{width:5,height:5,borderRadius:"50%",background:"rgba(168,255,120,0.5)",flexShrink:0}}/>}
-                </div>
-              );
-            })}
-          </div>
-          <div style={{paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.045)",marginTop:7,display:"flex",flexDirection:"column",gap:5}}>
-            {[["זמן שעבר",fmt(totalElapsed)],["סה\"כ",fmt(totalDur)]].map(([l,v]) => (
-              <div key={l} style={{display:"flex",justifyContent:"space-between"}}>
-                <span style={{color:"rgba(255,255,255,0.22)",fontSize:11}}>{l}</span>
-                <span style={{color:"#fff",fontFamily:"Oswald,sans-serif",fontSize:19}}>{v}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-      </div>
+                    </div>
+        ) : null}
+      />
 
       {/* BOTTOM TOOLBAR */}
       {toolbarOpen && (
@@ -906,11 +736,12 @@ export default function JudoTV() {
             <div style={{display:"flex",gap:12}}>
               <button onClick={() => { setModal("attendance"); setToolbarOpen(false); }} style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.7)",borderRadius:12,padding:"14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:16}}>📋 נוכחות היום</button>
               <button onClick={() => { setRunning(false); setModal("edit"); setToolbarOpen(false); setTimeout(()=>document.getElementById("tab-judokas")?.click(),100); }} style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.7)",borderRadius:12,padding:"14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:16}}>👥 חברי הנבחרת</button>
+              <button onClick={() => { setModal("notes"); setToolbarOpen(false); }} style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.7)",borderRadius:12,padding:"14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:16}}>📝 דגשים</button>
             </div>
 
             {/* Row 3: TV / remote */}
             <div style={{display:"flex",gap:12}}>
-              <button onClick={() => { setProjection(p=>!p); setToolbarOpen(false); }} style={{flex:1,background:projection?"rgba(255,107,0,0.2)":"rgba(255,255,255,0.05)",border:projection?"1px solid rgba(255,107,0,0.5)":"1px solid rgba(255,255,255,0.1)",color:projection?"#FF6B00":"rgba(255,255,255,0.7)",borderRadius:12,padding:"14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:16}}>📺 מצב הקרנה {projection?"— פעיל":""}</button>
+              <button onClick={() => { setProjection(p=>!p); setToolbarOpen(false); }} style={{flex:1,background:projection?"rgba(255,107,0,0.2)":"rgba(255,255,255,0.05)",border:projection?"1px solid rgba(255,107,0,0.5)":"1px solid rgba(255,255,255,0.1)",color:projection?"#FF6B00":"rgba(255,255,255,0.7)",borderRadius:12,padding:"14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:16}}>🧼 מסך נקי {projection?"— פעיל":""}</button>
               <button onClick={() => { setModal("remote"); setToolbarOpen(false); }} style={{flex:1,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.7)",borderRadius:12,padding:"14px",cursor:"pointer",fontFamily:"Heebo,sans-serif",fontSize:16}}>📱 שלט רחוק</button>
             </div>
 
@@ -929,6 +760,7 @@ export default function JudoTV() {
 
       {modal==="edit" && <EditorModal drills={drills} setDrills={d=>{setDrills(d);if(drillIdx>=d.length)setDrillIdx(Math.max(0,d.length-1));}} currentIndex={drillIdx} judokas={judokas} setJudokas={setJudokas} pairs={pairs} setPairs={setPairs} onClose={()=>setModal(null)}/>}
       {modal==="workouts" && <WorkoutModal drills={drills} judokas={judokas} pairs={pairs} onLoad={w=>{if(w.drills)setDrills(w.drills);if(w.judokas)setJudokas(w.judokas);if(w.pairs)setPairs(w.pairs);setDrillIdx(0);setRunning(false);}} onClose={()=>setModal(null)}/>}
+      {modal==="notes" && <NotesModal notes={notes} setNotes={setNotes} onClose={()=>setModal(null)}/>}
       {modal==="attendance" && <AttendanceModal judokas={judokas} onClose={()=>setModal(null)}/>}
       {modal==="remote" && (
         <RemotePairingModal
