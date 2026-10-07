@@ -22,6 +22,7 @@ import { useRemoteLink } from "../lib/link";
 import { normalizeRoomCode } from "../lib/remoteBus";
 import { COMMANDS } from "../lib/remoteProtocol";
 import { useWakeLock } from "../lib/wakeLock";
+import WorkoutBuilder from "../lib/WorkoutBuilder";
 
 const ORANGE = "#FF6B00";
 
@@ -581,6 +582,7 @@ function WorkoutTab({
   editId, setEditId, editData, setEditData, newDrill, setNewDrill,
   library, setLibrary, showLib, setShowLib,
 }) {
+  const [building, setBuilding] = useState(false);
   const blankDrill = () => ({ id:Date.now(), name:"", section:"technique", durationWork:60, durationRest:15, rounds:3, pattern:"alternate", restTiming:"after_each", activeColor:"white", type:"partner", note:"", autoNext:true });
   const blankRest  = () => ({ id:Date.now(), name:"מנוחה", section:"rest", durationWork:60, durationRest:0, rounds:1, pattern:"together", restTiming:"none", activeColor:"both", type:"rest", note:"", autoNext:true });
 
@@ -602,6 +604,8 @@ function WorkoutTab({
 
   return (
     <>
+      {building && <WorkoutBuilder drills={drills} onChange={setDrills} onClose={() => setBuilding(false)} />}
+      <button onClick={() => setBuilding(true)} style={{...btn("linear-gradient(135deg,#FF6B00,#cc4400)","#fff","none"),fontSize:16,padding:"15px"}}>📐 בונה מערך — קטלוג, גרירה וקבוצות</button>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span style={{color:"rgba(255,255,255,0.65)",fontSize:11,letterSpacing:3}}>מערך האימון</span>
         <span style={{color:"rgba(255,255,255,0.65)",fontSize:12}}>{drills.length} תרגילים · {fmt(total)}</span>
@@ -625,7 +629,7 @@ function WorkoutTab({
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:15,fontWeight:i===currentIdx?700:400,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{dr.name || "ללא שם"}</div>
                   <div style={{color:SEC_COLOR[dr.section||"warmup"],fontSize:11,marginTop:1}}>
-                    {dr.type !== "rest" ? dr.rounds + "× · " : ""}{fmt(totalDrillTime(dr))}
+                    {dr.type !== "rest" && dr.rounds > 1 ? dr.rounds + "× · " : ""}{fmt(totalDrillTime(dr))}
                   </div>
                 </div>
                 {i === liveIdx && <span style={{color:"#00ff88",fontSize:10,fontWeight:700,flexShrink:0}}>על המסך</span>}

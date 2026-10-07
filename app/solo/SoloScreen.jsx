@@ -22,7 +22,7 @@ import { INIT_JUDOKAS, INIT_DRILLS } from "../lib/defaults";
 import { useWorkoutClock } from "../lib/clock";
 import { useWakeLock } from "../lib/wakeLock";
 import StageView from "../lib/stage";
-import EditorModal from "../lib/EditorModal";
+import WorkoutBuilder from "../lib/WorkoutBuilder";
 import WorkoutModal from "../lib/WorkoutModal";
 
 const STORE_KEY = "judo_solo_state";
@@ -278,12 +278,10 @@ export default function SoloScreen() {
 
       {editStep === "edit" && draft && (
         <div {...uiProps} style={{ display: "contents" }}>
-        <EditorModal
-          drills={draft.drills} setDrills={d => setDraft(p => ({ ...p, drills: d }))}
-          currentIndex={drillIdx}
-          judokas={draft.judokas} setJudokas={j => setDraft(p => ({ ...p, judokas: j }))}
-          onClose={() => setEditStep("review")}
-        />
+          <WorkoutBuilder
+            drills={draft.drills} onChange={d => setDraft(p => ({ ...p, drills: d }))}
+            onClose={() => setEditStep("review")}
+          />
         </div>
       )}
 

@@ -133,7 +133,7 @@ export default function StageView({
                 {current ? current.name : ""}
               </h1>
               <div style={{ display: "flex", gap: U(2), alignItems: "baseline", flexWrap: "wrap", fontSize: U(2.8), color: "#c3cada", marginTop: U(0.6) }}>
-                {current && current.rounds > 1 && !resting && <span style={{ fontWeight: 800, color: "#fff" }}>סבב {phase.round || 1} מתוך {current.rounds}</span>}
+                {!resting && (phase.rounds || (current && current.rounds)) > 1 && <span style={{ fontWeight: 800, color: "#fff" }}>סבב {phase.round || 1} מתוך {phase.rounds || current.rounds}</span>}
                 {current && current.note && <span>{current.note}</span>}
               </div>
             </div>

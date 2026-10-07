@@ -74,7 +74,7 @@ export default function EditorModal({ drills, setDrills, currentIndex, judokas, 
                     <div style={{flex:1,minWidth:0}}>
                       <span style={{color:"#fff",fontSize:14,fontWeight:600}}>{d.name}</span>
                       <span style={{fontSize:11,marginRight:6,color:SEC_COLOR[d.section||"warmup"]}}>{DRILL_SECTIONS.find(s=>s.id===d.section)?.label||""}</span>
-                      <span style={{color:"rgba(255,255,255,0.25)",fontSize:12}}>{fmt(totalDrillTime(d))}{d.type!=="rest"?" · "+d.rounds+"×":""}</span>
+                      <span style={{color:"rgba(255,255,255,0.25)",fontSize:12}}>{fmt(totalDrillTime(d))}{d.type!=="rest"&&d.rounds>1?" · "+d.rounds+"×":""}</span>
                     </div>
                     <div style={{display:"flex",gap:4,alignItems:"center"}}>
                       <div title="מעבר אוטומטי" style={{width:6,height:6,borderRadius:"50%",background:d.autoNext?"#a8ff78":"rgba(255,255,255,0.15)"}}/>

@@ -1,6 +1,8 @@
 // Shared constants, data helpers and the Supabase REST client.
 // Used by both the TV display (app/JudoTrainer.jsx) and the phone remote (app/remote).
 
+import { stepsToPhases } from "./steps";
+
 export const SUPA_URL = "https://oakbpcjxjunppuyddpsj.supabase.co";
 export const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ha2JwY2p4anVucHB1eWRkcHNqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyOTcwOTIsImV4cCI6MjA5NTg3MzA5Mn0.EoYTL3N_P5C05VyR2-EFKcQUk3dcZSE3l3kWeADzQnE";
 
@@ -51,6 +53,8 @@ export const fmt = s => {
 
 export function getDrillPhases(drill) {
   if (!drill) return [];
+  // Built from steps (workout builder): flatten the tree, nothing else to compute.
+  if (Array.isArray(drill.steps)) return stepsToPhases(drill.steps);
   if (drill.type === "rest" || drill.type === "group" || drill.type === "personal") {
     return [{ phase:"work", who:"both", duration: drill.durationWork || 60, label: drill.type === "rest" ? "מנוחה" : "עבודה" }];
   }

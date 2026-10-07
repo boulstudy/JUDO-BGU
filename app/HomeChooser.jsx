@@ -100,6 +100,7 @@ export default function HomeChooser() {
       </div>
 
       <div style={{ display: "flex", gap: 22, flexWrap: "wrap", justifyContent: "center" }}>
+        <a href="/build" style={{ color: "rgba(255,255,255,0.55)", fontSize: 14, textDecoration: "none" }}>📐 בונה מערך (מחשב / טאבלט)</a>
         <a href="/clubs" style={{ color: "rgba(255,255,255,0.55)", fontSize: 14, textDecoration: "none" }}>🗂️ ניהול מועדונים (בטא)</a>
       </div>
     </div>
